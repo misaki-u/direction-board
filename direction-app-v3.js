@@ -991,7 +991,7 @@ function autoBackup(name, data) {
 
 // ===== SAVE / LOAD =====
 function getAllInputs() {
-  const ids = ['projectName', 'client_name', 'client_contact', 'client_region', 'ind3', 'project_phase', 'date_kickoff', 'date_delivery', 'budget', 'notes', 'mission_text', 'target_desc', 'target_behavior', 'avoid_image', 'persona_name', 'persona_job', 'persona_family', 'persona_lifestyle', 'persona_pain', 'persona_goal', 'persona_behavior', 'persona_quote', 'font_heading', 'font_body', 'tonmana_memo'];
+  const ids = ['projectName', 'client_name', 'client_contact', 'client_region', 'ind3', 'project_phase', 'date_kickoff', 'date_delivery', 'budget', 'design_url', 'notes', 'mission_text', 'target_desc', 'target_behavior', 'avoid_image', 'persona_name', 'persona_job', 'persona_family', 'persona_lifestyle', 'persona_pain', 'persona_goal', 'persona_behavior', 'persona_quote', 'font_heading', 'font_body', 'tonmana_memo'];
   const d = {}; ids.forEach(id => { const el = document.getElementById(id); if (el) d[id] = el.value; });
   d.ind1 = document.getElementById('ind1').value;
   d.ind2 = document.getElementById('ind2').value;
@@ -1158,6 +1158,67 @@ function genPrompt() {
   const d = getAllInputs();
   const prompt = `以下のヒアリング・ディレクション情報をもとに、デザイン・制作の方針書を詳しく作成してください。\n\nクライアント：${d.client_name}\n業種：${d.ind1} > ${d.ind2} ${d.ind3 ? '(' + d.ind3 + ')' : ''}\n地域：${d.client_region}\n制作物：${S.mediums.join('、')}\nMission：${d.mission_text}\nターゲット：${d.target_desc}\nペルソナの悩み：${d.persona_pain}\nイメージKW：${gc('image')}\nイメージスケール：${S.scale.label}\n\n【出力してほしいこと】\n1. タイポグラフィ・フォントの方向性\n2. 写真・イラストの方向性\n3. レイアウト・余白の考え方\n4. UIコンポーネントの印象（角丸・線の細さ等）\n5. キャッチコピー案（3案）\n6. ページ構成の提案`;
   navigator.clipboard.writeText(prompt).then(() => showToast('プロンプトをコピー。このチャットに貼り付けてください'));
+}
+
+// ===== PROJECT DEFINITION SHEET (スプレッドシート直貼り用TSV) =====
+function genProjectDef() {
+  const d = getAllInputs();
+  const xe = s => (s || '').replace(/\t/g, '　').replace(/\n/g, ' ');
+  const qa = (key, idx) => (QS[key]?.[idx]?.answer || '');
+  const qaAll = key => (QS[key] || []).filter(q => q.answer).map(q => `【${q.q}】${q.answer}`).join(' / ');
+
+  const problems  = [qa('biz-bg', 1), qa('biz-bg', 0)].filter(Boolean).join(' / ');
+  const goals     = (S.bullets.goals || []).map(b => b.text).join(' / ') || xe(d.mission_text);
+  const target    = [xe(d.persona_name) ? `${xe(d.persona_name)}（${xe(d.persona_job)}）` : '', xe(d.target_desc)].filter(Boolean).join(' ');
+  const insight   = [xe(d.persona_pain), xe(d.persona_quote)].filter(Boolean).join(' / ');
+  const query     = qa('tgt-cur', 2) || xe(d.target_behavior);
+  const strengths = qaAll('strength');
+  const comps     = (S.competitors || []).map(c => c.name + (c.url ? `（${c.url}）` : '')).join(' / ') || '';
+  const refUrls   = (S.refs || []).filter(r => r.url).slice(0, 5).map(r => (r.title ? `${r.title} ` : '') + r.url + (r.cc ? `（${r.cc}）` : '')).join(' / ');
+  const impression= [S.scale.label, (S.chips.image || []).join('・'), xe(d.avoid_image) ? `避けたい：${xe(d.avoid_image)}` : ''].filter(Boolean).join(' ／ ');
+  const tactics   = (S.tactics || []).map(t => t.title).join(' / ');
+  const mtg       = (S.meetings || []).slice(0, 3).map(m => `[${m.date || ''}]${m.title || ''}`).join(' / ');
+
+  // TABで区切ったTSV — スプレッドシートのA列から貼ると B=ラベル C=内容 になります
+  const rows = [
+    ['', '※赤は必須項目'],
+    ['', '要　件　定　義'],
+    ['', 'プロジェクト名',                          xe(d.projectName)],
+    ['', 'プロジェクト詳細',                        xe(d.notes)],
+    ['', 'URL',                                      qa('req', 0) || ''],
+    ['', '提供資料URL等',                            xe(d.design_url)],
+    ['', '現状の課題、依頼背景',                    problems],
+    ['', '目的（定量/機能的）とCVポイント',         goals],
+    ['', '流入経路とデバイス',                      [S.mediums.join('・'), xe(d.target_behavior)].filter(Boolean).join(' / ')],
+    ['', 'メインターゲット（N1）',                  target],
+    ['', '検索クエリ',                              query],
+    ['', 'インサイト',                              insight],
+    ['', '競合他社・ベンチマーク',                  comps],
+    ['', '企業や商材の特長、優位性・独自性（なぜ選ばれるのか？）', strengths],
+    ['', '期待するデザインクオリティやアウトプットイメージ', refUrls],
+    ['', '与えたい印象',                            impression],
+    ['', 'デザインの仕様・ページ数',                S.mediums.join('・')],
+    ['', '希望納品形式',                            ''],
+    ['', '希望納品スケジュール',                    xe(d.date_delivery)],
+    ['', '予算の上限',                              xe(d.budget)],
+    ['', 'その他必要な施策・クリエイティブ',        tactics],
+    ['', '発注判断軸',                              ''],
+    ['', 'mtgメモ',                                 mtg],
+    ['', '補足・注意事項',                          xe(d.notes)],
+  ];
+
+  const tsv = rows.map(r => r.join('\t')).join('\n');
+  const out  = document.getElementById('projdef-out');
+  const wrap = document.getElementById('projdef-wrap');
+  if (out)  out.textContent = tsv;
+  if (wrap) wrap.style.display = '';
+  wrap?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function copyProjectDef() {
+  const out = document.getElementById('projdef-out');
+  if (!out) return;
+  navigator.clipboard.writeText(out.textContent).then(() => showToast('コピーしました。スプレッドシートのA1セルに貼り付けてください'));
 }
 
 // ===== FIGMA SLIDE PROMPT GENERATOR =====

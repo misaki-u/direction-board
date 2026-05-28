@@ -179,6 +179,7 @@
         <div class="field"><label class="flabel">納品予定日</label><input type="text" id="date_delivery" placeholder="2026/09/30"></div>
       </div>
       <div class="field" style="grid-column:1/-1"><label class="flabel">予算感</label><input type="text" id="budget" placeholder="〜50万円"></div>
+      <div class="field" style="grid-column:1/-1"><label class="flabel">デザインデータURL（Figma等）</label><input type="text" id="design_url" placeholder="https://www.figma.com/..."></div>
     </div>
     <div class="field" style="margin-top:4px"><label class="flabel">制作物の選択（複数可）</label>
       <div class="chips" id="med-chips">
@@ -835,8 +836,22 @@
     <button class="btn btn-o" onclick="copyOutput()">📋 テキストをコピー</button>
     <button class="btn btn-p" onclick="genPrompt()">✨ Claudeへ深掘りプロンプト</button>
     <button class="btn btn-o" onclick="genFigmaPrompt()">🎨 Figmaスライドプロンプト生成</button>
+    <button class="btn btn-p" onclick="genProjectDef()">📊 プロジェクト定義書を生成</button>
     <button class="btn btn-o" onclick="go('p1')">← 最初から</button>
   </div>
+
+  <!-- Project Definition Output -->
+  <div id="projdef-wrap" style="display:none;margin-top:18px">
+    <div class="card" style="margin-bottom:0">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div class="ctitle" style="margin-bottom:0">プロジェクト定義書（スプレッドシート貼り付け用）</div>
+        <button class="btn btn-p" style="font-size:12px;padding:5px 14px" onclick="copyProjectDef()">📋 コピー</button>
+      </div>
+      <p style="font-size:11px;color:var(--text3);margin-bottom:10px">コピーして<a href="https://docs.google.com/spreadsheets/d/1MEp2MVJ4zLyKSC1lkoWVuqfil4PZd12cp_ynzzQ5Ld8/" target="_blank" style="color:var(--accent)">プロジェクト定義書スプレッドシート</a>の <strong>A1セル</strong> に貼り付けると列ごとに自動で入ります。</p>
+      <pre id="projdef-out" class="min-prompt-box" style="max-height:380px;font-size:10px"></pre>
+    </div>
+  </div>
+
   <!-- Figma Prompt Output -->
   <div id="figma-prompt-wrap" style="display:none;margin-top:18px">
     <div class="card" style="margin-bottom:0">

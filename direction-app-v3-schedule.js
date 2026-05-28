@@ -25,6 +25,7 @@ const SCH_PRESETS = {
     { name: 'デザインレビュー',           type: 'client',     d: 45, dur: 5  },
     { name: '下層ページデザイン',         type: 'production', d: 50, dur: 21, ms: '下層レビュー' },
     { name: '下層レビュー',               type: 'client',     d: 71, dur: 5  },
+    { name: '環境構築',                   type: 'production', d: 50, dur: 7  },
     { name: 'コーディング',               type: 'production', d: 55, dur: 35 },
     { name: '最終確認・修正対応',         type: 'client',     d: 85, dur: 5  },
     { name: '公開作業',                   type: 'production', d: 90, dur: 2,  ms: '公開' },

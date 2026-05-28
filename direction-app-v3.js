@@ -1028,7 +1028,8 @@ function saveProject(silent = false) {
     });
     setProjects(projects);
     currentProjectId = id;
-    showToast('保存しました');
+    updateSaveState();
+    showToast('保存しました（⌘S で随時保存できます）');
     autoBackup(name, fullData);
     return;
   }
@@ -1691,6 +1692,7 @@ function openProject(id) {
   const proj = projects.find(p => p.id === id);
   if (!proj) return;
   currentProjectId = id;
+  updateSaveState();
   if (proj.data) { try { restoreData(proj.data); } catch (e) {} }
   else { resetState(); }
   document.getElementById('projectName').value = proj.name;
@@ -2131,7 +2133,16 @@ function exportProject(id, e) {
 
 // ===== DASHBOARD UI =====
 function showDashboard() { renderDashboard(); document.getElementById('dashboard').style.display = 'block'; }
-function hideDashboard() { document.getElementById('dashboard').style.display = 'none'; }
+function hideDashboard() {
+  document.getElementById('dashboard').style.display = 'none';
+  updateSaveState();
+}
+
+function updateSaveState() {
+  const badge = document.getElementById('unsaved-badge');
+  if (!badge) return;
+  badge.style.display = currentProjectId ? 'none' : '';
+}
 
 const STATUS_COLORS = {
   '進行中': { bg: '#eef4f1', color: '#2c4a3e', border: '#b8d4c8' },
@@ -2481,4 +2492,15 @@ if (_initProjects.length === 0) { showDashboard(); }
 
 // ===== AUTO-SAVE (30秒ごと、既存案件のみ) =====
 setInterval(() => { if (currentProjectId) saveProject(true); }, 30000);
+
+// ===== Cmd+S / Ctrl+S で保存 =====
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+    e.preventDefault();
+    saveProject();
+  }
+});
+
+// ===== 初期表示の未保存状態を反映 =====
+updateSaveState();
 

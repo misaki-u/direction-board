@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Direction Board v3</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Shippori+Mincho+B1:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="direction-app-v3.css">
+</head>
+<body>
+<div class="toast" id="toast"></div>
+
+<div class="header">
+  <span class="logo" style="cursor:pointer" onclick="showDashboard()">Direction Board</span><span class="ver">v3</span>
+  <span style="color:rgba(255,255,255,.3);margin:0 4px">|</span>
+  <input class="project-input" id="projectName" placeholder="案件名を入力..." oninput="updateProjectTitle()">
+  <div class="spacer"></div>
+  <span id="autosave-indicator" style="font-size:11px;color:rgba(255,255,255,.45);opacity:0;transition:opacity 1s;margin-right:6px;white-space:nowrap"></span>
+  <button class="hbtn" style="background:rgba(255,255,255,.25)" onclick="showDashboard()">📁 案件一覧</button>
+  <button class="hbtn" onclick="saveProject()">保存</button>
+  <button class="hbtn" onclick="loadData()">読込</button>
+</div>
+
+<!-- DASHBOARD OVERLAY -->
+<div id="dashboard" style="display:none;position:fixed;inset:0;z-index:500;background:var(--bg);overflow-y:auto">
+  <div style="max-width:960px;margin:0 auto;padding:32px 24px 80px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px">
+      <div>
+        <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin-bottom:6px">Direction Board</div>
+        <h1 style="font-family:'Shippori Mincho B1',serif;font-size:26px;font-weight:600">案件一覧</h1>
+      </div>
+      <button class="btn btn-p" onclick="newProject()" style="display:flex;align-items:center;gap:6px">＋ 新規案件</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:28px" id="db-stats"></div>
+    <div id="db-backup-reminder"></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+      <input type="text" id="db-search" placeholder="案件名・クライアント名で検索..." oninput="renderDashboard()"
+        style="flex:1;min-width:200px;border:1px solid var(--border);border-radius:7px;padding:8px 12px;font-size:13px;font-family:'Noto Sans JP',sans-serif;background:var(--surface);outline:none">
+      <select id="db-filter-status" onchange="renderDashboard()"
+        style="border:1px solid var(--border);border-radius:7px;padding:8px 12px;font-size:12px;font-family:'Noto Sans JP',sans-serif;background:var(--surface);outline:none;cursor:pointer">
+        <option value="">すべてのステータス</option>
+        <option>進行中</option><option>提案中</option><option>完了</option><option>保留</option>
+      </select>
+      <select id="db-sort" onchange="renderDashboard()"
+        style="border:1px solid var(--border);border-radius:7px;padding:8px 12px;font-size:12px;font-family:'Noto Sans JP',sans-serif;background:var(--surface);outline:none;cursor:pointer">
+        <option value="updated">更新日順</option>
+        <option value="created">作成日順</option>
+        <option value="name">案件名順</option>
+      </select>
+    </div>
+    <div id="db-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px"></div>
+    <div id="db-empty" style="display:none;text-align:center;padding:60px 0;color:var(--text3)">
+      <div style="font-size:40px;margin-bottom:12px">📁</div>
+      <div style="font-size:14px;margin-bottom:16px">まだ案件がありません</div>
+      <button class="btn btn-p" onclick="newProject()">＋ 最初の案件を作成</button>
+    </div>
+
+    <!-- データ管理 -->
+    <div style="margin-top:40px;border-top:1px solid var(--border);padding-top:28px">
+      <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);margin-bottom:14px">データ管理</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start">
+        <div>
+          <button class="btn btn-o" onclick="exportAllProjects()" style="font-size:13px">💾 全案件をバックアップ（JSON）</button>
+          <div style="font-size:11px;color:var(--text3);margin-top:5px">全案件データをJSONファイルに書き出します。<br>定期的に保存しておくと安心です。</div>
+        </div>
+        <div>
+          <button class="btn btn-o" onclick="importAllProjects()" style="font-size:13px">📥 バックアップから復元（JSON）</button>
+          <div style="font-size:11px;color:var(--text3);margin-top:5px">JSONファイルから案件を復元します。<br>既存データとマージします（重複IDはスキップ）。</div>
+        </div>
+      </div>
+      <div style="margin-top:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:11px;color:var(--text3);line-height:1.75">
+        ⚠️ データはこのブラウザの <strong>localStorage</strong> に保存されています。<br>
+        ブラウザの「閲覧データを削除」を実行すると消える可能性があります。<br>
+        定期的な <strong>JSONバックアップ</strong> を強くおすすめします。
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+<div class="sidebar">
+  <div class="sb-group">
+    <div class="sb-label">フェーズ 0</div>
+    <div class="nav" onclick="go('p-pf')" id="nav-p-pf"><span class="nav-n">✦</span>事前フォーム</div>
+    <div class="nav" onclick="go('p1b')" id="nav-p1b"><span class="nav-n">✦</span>ヒアリング</div>
+    <div class="nav" onclick="go('p10')" id="nav-p10"><span class="nav-n">0</span>スケジュール</div>
+  </div>
+  <div class="sb-group">
+    <div class="sb-label">フェーズ A</div>
+    <div class="nav active" onclick="go('p1')" id="nav-p1"><span class="nav-n">1</span>基本情報</div>
+    <div class="nav" onclick="go('p2')" id="nav-p2"><span class="nav-n">2</span>目的・ゴール</div>
+  </div>
+  <div class="sb-group">
+    <div class="sb-label">フェーズ B</div>
+    <div class="nav" onclick="go('p3')" id="nav-p3"><span class="nav-n">3</span>ターゲット</div>
+    <div class="nav" onclick="go('p4')" id="nav-p4"><span class="nav-n">4</span>ペルソナ / CJM</div>
+  </div>
+  <div class="sb-group">
+    <div class="sb-label">フェーズ C</div>
+    <div class="nav" onclick="go('p5')" id="nav-p5"><span class="nav-n">5</span>競合調査</div>
+    <div class="nav" onclick="go('p6')" id="nav-p6"><span class="nav-n">6</span>参考サイト集</div>
+  </div>
+  <div class="sb-group">
+    <div class="sb-label">フェーズ D</div>
+    <div class="nav" onclick="go('p7')" id="nav-p7"><span class="nav-n">7</span>トンマナ</div>
+    <div class="nav" onclick="go('p9')" id="nav-p9"><span class="nav-n">8</span>アクセシビリティ</div>
+    <div class="nav" onclick="go('p11')" id="nav-p11"><span class="nav-n">✦</span>議事録</div>
+  </div>
+  <div class="sb-group">
+    <div class="sb-label">出力</div>
+    <div class="nav" onclick="go('p8')" id="nav-p8"><span class="nav-n">✦</span>まとめ出力</div>
+  </div>
+  <div class="sb-mediums">
+    <div class="sb-med-label">制作物</div>
+    <div id="medList"></div>
+    <div class="med-add" onclick="addMedPrompt()">＋ 追加</div>
+  </div>
+</div>
+
+<div class="main">
+
+<!-- ===== P1: 基本情報 ===== -->
+<div class="page active" id="p1">
+  <div class="phead">
+    <div class="eyebrow">Phase A — 01</div>
+    <h1 class="ptitle">基本情報</h1>
+    <div class="pdesc">クライアントとプロジェクトの基本情報を入力してください</div>
+  </div>
+  <div class="progress"><div class="pfill" style="width:10%"></div></div>
+
+  <div class="card">
+    <div class="ctitle">クライアント情報</div>
+    <div class="g2">
+      <div class="field"><label class="flabel">クライアント名 <span class="req">*</span></label><input type="text" id="client_name" placeholder="株式会社〇〇"></div>
+      <div class="field"><label class="flabel">担当者名</label><input type="text" id="client_contact" placeholder="田中 様"></div>
+    </div>
+    <div class="field"><label class="flabel">所在地・地域</label><input type="text" id="client_region" placeholder="例：石川県能登町 / 東京都渋谷区"></div>
+  </div>
+
+  <div class="card">
+    <div class="ctitle">業種（3段階選択）</div>
+    <div class="industry-cascade">
+      <div class="cascade-row">
+        <div style="flex:1"><label class="flabel">大分類</label>
+          <select id="ind1" onchange="updateInd2()">
+            <option value="">選択してください</option>
+            <option>医療・ヘルスケア</option><option>美容・コスメ</option><option>飲食・フード</option>
+            <option>不動産・建設</option><option>教育・スクール</option><option>IT・テクノロジー</option>
+            <option>製造・メーカー</option><option>小売・EC</option><option>金融・保険</option>
+            <option>エンタメ・メディア</option><option>ブライダル・ウェディング</option>
+            <option>福祉・相談・支援</option><option>士業・コンサル</option>
+            <option>宿泊・観光</option><option>スポーツ・フィットネス</option><option>その他</option>
+          </select>
+        </div>
+        <div style="flex:1"><label class="flabel">中分類</label>
+          <select id="ind2" onchange="updateInd3()" disabled>
+            <option value="">大分類を先に選択</option>
+          </select>
+        </div>
+      </div>
+      <div class="industry-detail">
+        <label class="flabel">詳細・補足（自由入力）</label>
+        <input type="text" id="ind3" placeholder="例：個人カウンセリングルーム / 訪問介護事業所 / 小規模クリニック">
+        <div class="cascade-note" id="ind-hint"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ctitle">フェーズ・制作物</div>
+    <div class="g2">
+      <div class="field"><label class="flabel">制作フェーズ</label>
+        <select id="project_phase">
+          <option>新規制作</option><option>リニューアル</option><option>追加制作</option><option>ブランディングから</option>
+        </select>
+      </div>
+      <div class="g2" style="grid-column:1/-1">
+        <div class="field"><label class="flabel">キックオフ日</label><input type="text" id="date_kickoff" placeholder="2026/06/01"></div>
+        <div class="field"><label class="flabel">納品予定日</label><input type="text" id="date_delivery" placeholder="2026/09/30"></div>
+      </div>
+      <div class="field" style="grid-column:1/-1"><label class="flabel">予算感</label><input type="text" id="budget" placeholder="〜50万円"></div>
+    </div>
+    <div class="field" style="margin-top:4px"><label class="flabel">制作物の選択（複数可）</label>
+      <div class="chips" id="med-chips">
+        <div class="chip" onclick="togMed('Webサイト',this)">Webサイト</div>
+        <div class="chip" onclick="togMed('LP',this)">LP</div>
+        <div class="chip" onclick="togMed('採用サイト',this)">採用サイト</div>
+        <div class="chip" onclick="togMed('コーポレートサイト',this)">コーポレートサイト</div>
+        <div class="chip" onclick="togMed('ロゴ',this)">ロゴ</div>
+        <div class="chip" onclick="togMed('ブランディング',this)">ブランディング</div>
+        <div class="chip" onclick="togMed('チラシ',this)">チラシ</div>
+        <div class="chip" onclick="togMed('名刺',this)">名刺</div>
+        <div class="chip" onclick="togMed('LINE構築',this)">LINE構築</div>
+        <div class="chip" onclick="togMed('リッチメニュー',this)">リッチメニュー</div>
+        <div class="chip" onclick="togMed('SNSビジュアル',this)">SNSビジュアル</div>
+      </div>
+    </div>
+    <div class="field"><label class="flabel">備考・特記事項</label><textarea id="notes" placeholder="既存サイトあり / WordPress希望 / Figmaデータ引き継ぎ など" style="min-height:52px"></textarea></div>
+  </div>
+
+  <div class="navbar"><div></div><button class="btn btn-p" onclick="go('p1b')">ヒアリングへ →</button></div>
+</div>
+
+<!-- ===== P-PF: 事前フォーム ===== -->
+<div class="page" id="p-pf">
+  <div class="phead">
+    <div class="eyebrow">Phase A — 事前準備</div>
+    <h1 class="ptitle">事前ヒアリングフォーム</h1>
+    <div class="pdesc">クライアントに事前回答してもらうことでヒアリング時間を削減します</div>
+  </div>
+  <div class="progress"><div class="pfill" style="width:10%"></div></div>
+
+  <!-- ワークフロー -->
+  <div class="card">
+    <div class="ctitle">フローの流れ</div>
+    <div class="pf-steps">
+      <div class="pf-step"><div class="pf-snum">①</div><div class="pf-stxt"><strong>Google Apps Script を実行</strong><br>Googleスプレッドシートを新規作成→「拡張機能」→「Apps Script」にスクリプトを貼り付けて実行。ポップアップでURLが表示されます。</div></div>
+      <div class="pf-arrow">→</div>
+      <div class="pf-step"><div class="pf-snum">②</div><div class="pf-stxt"><strong>クライアントへフォームURLを送付</strong><br>実行後にポップアップでURLが表示されます。URLをコピーしてクライアントへ送付。10〜15分で回答完了。</div></div>
+      <div class="pf-arrow">→</div>
+      <div class="pf-step"><div class="pf-snum">③</div><div class="pf-stxt"><strong>回答CSVをインポート</strong><br>Googleスプレッドシートの回答をCSVでダウンロードし、下記からインポート。ヒアリングシートに自動反映されます。</div></div>
+    </div>
+  </div>
+
+  <!-- Apps Script 生成 -->
+  <div class="card">
+    <div class="ctitle">① Google フォーム作成スクリプト</div>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:12px">
+      <strong style="color:var(--text2)">手順：</strong>
+      ① <a href="https://drive.google.com" target="_blank" style="color:var(--accent)">Googleドライブ</a>で「新規」→「Googleスプレッドシート」を作成 →
+      ② そのスプレッドシートのメニューから「拡張機能」→「Apps Script」を開く →
+      ③ 下記スクリプトを全文貼り付けて ▶ 実行<br>
+      <span style="color:#d67000">※ script.google.com からではなく、必ずスプレッドシートの「拡張機能」から開いてください。</span>
+    </p>
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <button class="btn btn-p" onclick="showPreFormScript()">📋 スクリプトを表示・コピー</button>
+    </div>
+    <div id="pf-script-wrap" style="display:none">
+      <pre id="pf-script-out" class="min-prompt-box" style="max-height:320px;font-size:10px"></pre>
+      <button class="btn btn-o" onclick="copyPreFormScript()" style="margin-top:8px;font-size:12px">📋 コピー</button>
+    </div>
+  </div>
+
+  <!-- CSV インポート -->
+  <div class="card">
+    <div class="ctitle">③ フォーム回答をインポート（CSV）</div>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:12px">
+      スプレッドシートの回答シートを <strong>ファイル → ダウンロード → カンマ区切り形式（.csv）</strong> でダウンロードし、下からインポートしてください。<br>
+      最新の1件（最後の行）が自動的にヒアリングシートに反映されます。
+    </p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-o" onclick="importPreFormCSV()">📥 CSVをインポート</button>
+    </div>
+    <div id="pf-preview" style="display:none;margin-top:14px">
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text)">インポート内容プレビュー（最新の回答）</div>
+      <div id="pf-preview-body"></div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn btn-p" onclick="applyFormPreview()">ヒアリングシートに反映する</button>
+        <button class="btn btn-o" onclick="document.getElementById('pf-preview').style.display='none'">キャンセル</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="navbar">
+    <button class="btn btn-o" onclick="go('p1')">← 基本情報</button>
+    <button class="btn btn-p" onclick="go('p1b')">ヒアリングへ →</button>
+  </div>
+</div>
+
+<!-- ===== P1b: ヒアリングシート v2 ===== -->
+<div class="page" id="p1b">
+  <div class="phead">
+    <div class="eyebrow">Phase A — ヒアリング</div>
+    <h1 class="ptitle">ヒアリングシート</h1>
+    <div class="pdesc">回答をもとに目的・ターゲット・ペルソナ・競合を自動入力します</div>
+  </div>
+  <div class="progress"><div class="pfill" style="width:22%"></div></div>
+
+  <!-- ヒアリングメタ情報 -->
+  <div class="h-meta-bar">
+    <div class="h-mf"><span>日時</span><input id="m_date" placeholder="2026年〇月〇日 13:00〜"></div>
+    <div class="h-mf"><span>参加者</span><input id="m_members" placeholder="〇〇様・自分"></div>
+    <div class="h-mf"><span>形式</span><input id="m_format" placeholder="オンライン / 対面"></div>
+    <div class="h-mf"><span>顧客URL</span><input id="m_url" placeholder="https://..."></div>
+    <div class="h-mf"><span>録画URL</span><input id="m_rec" placeholder="https://..."></div>
+  </div>
+
+  <!-- 制作物チップ -->
+  <div class="h-med-bar">
+    <span class="h-med-lbl">制作物</span>
+    <div class="h-mchip on" onclick="this.classList.toggle('on')">共通</div>
+    <div class="h-mchip" onclick="this.classList.toggle('on')">Web / LP</div>
+    <div class="h-mchip" onclick="this.classList.toggle('on')">ロゴ</div>
+    <div class="h-mchip" onclick="this.classList.toggle('on')">チラシ・名刺</div>
+    <div class="h-mchip" onclick="this.classList.toggle('on')">LINE / SNS</div>
+    <div class="h-mchip" onclick="this.classList.toggle('on')">ITコンサル・Web診断</div>
+  </div>
+
+  <!-- 2カラム：スクロールナビ ＋ コンテンツ -->
+  <div class="h-layout">
+
+    <!-- サイドバースクロールナビ -->
+    <div class="h-sb" id="h-sb">
+      <div class="h-snav active" onclick="scrollToHBlock('b1')" id="hsn-b1"><span class="h-sdot">1</span>案件概要</div>
+      <div class="h-snav" onclick="scrollToHBlock('b2')" id="hsn-b2"><span class="h-sdot">2</span>事業・課題</div>
+      <div class="h-snav" onclick="scrollToHBlock('b3')" id="hsn-b3"><span class="h-sdot">3</span>強み・差別化</div>
+      <div class="h-snav" onclick="scrollToHBlock('b4')" id="hsn-b4"><span class="h-sdot">4</span>ターゲット</div>
+      <div class="h-snav" onclick="scrollToHBlock('b5')" id="hsn-b5"><span class="h-sdot">5</span>購買心理</div>
+      <div class="h-sdivider"></div>
+      <div class="h-snav" onclick="scrollToHBlock('b6')" id="hsn-b6"><span class="h-sdot">6</span>制作物の詳細</div>
+      <div class="h-sdivider"></div>
+      <div class="h-snav" onclick="scrollToHBlock('b7')" id="hsn-b7"><span class="h-sdot">7</span>競合・参考</div>
+      <div class="h-snav" onclick="scrollToHBlock('b8')" id="hsn-b8"><span class="h-sdot">8</span>発注・スケジュール</div>
+      <div class="h-snav" onclick="scrollToHBlock('b9')" id="hsn-b9"><span class="h-sdot">9</span>ネクストアクション</div>
+    </div>
+
+    <!-- ヒアリングコンテンツ -->
+    <div class="h-content">
+
+      <!-- 業種別質問バナー -->
+      <div id="ind-q-banner" class="ind-q-banner" style="display:none"></div>
+
+      <!-- B1: 案件概要 -->
+      <div class="sblock" id="b1">
+        <div class="sblock-title">案件概要</div>
+        <div class="sblock-desc">依頼内容と前提情報を確認します</div>
+        <div class="toggle-all-row">
+          <button class="toggle-all-btn" onclick="openAll('b1')">すべて開く</button>
+          <button class="toggle-all-btn" onclick="closeAll('b1')">すべて閉じる</button>
+        </div>
+        <div class="subsec">
+          <div class="q-group" id="qg-req"></div>
+          <div class="add-q-row"><input id="qi-req" placeholder="項目を追加..."><button onclick="addQ('req','qi-req')">＋ 追加</button></div>
+          <div class="free-note"><label>メモ・補足</label><textarea id="fn-req"></textarea></div>
+        </div>
+      </div>
+
+      <!-- B2: 事業・課題 -->
+      <div class="sblock" id="b2">
+        <div class="sblock-title">事業・課題・目標</div>
+        <div class="sblock-desc">ビジネスの現状と解決したい課題を整理します</div>
+        <div class="toggle-all-row">
+          <button class="toggle-all-btn" onclick="openAll('b2')">すべて開く</button>
+          <button class="toggle-all-btn" onclick="closeAll('b2')">すべて閉じる</button>
+        </div>
+        <div class="subsec">
+          <div class="subsec-title">背景・現状課題</div>
+          <div class="q-group" id="qg-biz-bg"></div>
+          <div class="add-q-row"><input id="qi-biz-bg" placeholder="項目を追加..."><button onclick="addQ('biz-bg','qi-biz-bg')">＋ 追加</button></div>
+          <div class="free-note"><label>メモ・補足</label><textarea id="fn-biz-bg"></textarea></div>
+        </div>
+        <div class="subsec">
+          <div class="subsec-title">KGI / KPI / 数値目標</div>
+          <div class="kpi-grid">
+            <div class="kpi-item"><label>KGI（最終目標）</label><input id="kpi-kgi" placeholder="例：年商1億円達成"></div>
+            <div class="kpi-item"><label>KSF（成功要因）</label><input id="kpi-ksf" placeholder="例：新規顧客の継続率向上"></div>
+            <div class="kpi-item"><label>KPI 目標値</label><input id="kpi-target" placeholder="例：月間問い合わせ20件"></div>
+            <div class="kpi-item"><label>KPI 現状値</label><input id="kpi-current" placeholder="例：月間問い合わせ3件"></div>
+          </div>
+          <div class="subsec-title" style="margin-top:10px;font-size:11px">広告 / LP 用 CPA設定（該当の場合）</div>
+          <div class="kpi-grid">
+            <div class="kpi-item"><label>広告予算額</label><input id="cpa-budget" placeholder="例：月50万円"></div>
+            <div class="kpi-item"><label>目標 CPA</label><input id="cpa-goal" placeholder="例：5,000円"></div>
+            <div class="kpi-item"><label>現状 CPA</label><input id="cpa-now" placeholder="例：18,000円"></div>
+            <div class="kpi-item"><label>限界 CPA</label><input id="cpa-limit" placeholder="例：8,000円"></div>
+            <div class="kpi-item"><label>リピート率</label><input id="cpa-repeat" placeholder="例：30%"></div>
+            <div class="kpi-item"><label>LTV</label><input id="cpa-ltv" placeholder="例：120,000円"></div>
+          </div>
+          <div class="free-note"><label>メモ・補足</label><textarea id="fn-kpi"></textarea></div>
+        </div>
+        <div class="subsec">
+          <div class="subsec-title">ビジネスモデル・収益構造</div>
+          <div class="q-group" id="qg-biz-model"></div>
+          <div class="add-q-row"><input id="qi-biz-model" placeholder="項目を追加..."><button onclick="addQ('biz-model','qi-biz-model')">＋ 追加</button></div>
+          <div class="free-note"><label>メモ・補足</label><textarea id="fn-biz-model"></textarea></div>
+        </div>
+      </div>
+
+      <!-- B3: 強み・差別化 -->
+      <div class="sblock" id="b3">
+        <div class="sblock-title">強み・差別化ポイント</div>
+        <div class="sblock-desc">他社にはない価値・選ばれる理由を一緒に深掘りします</div>
+        <div class="toggle-all-row">
+          <button class="toggle-all-btn" onclick="openAll('b3')">すべて開く</button>
+          <button class="toggle-all-btn" onclick="closeAll('b3')">すべて閉じる</button>
+        </div>
+        <div class="q-group" id="qg-strength"></div>
+        <div class="add-q-row"><input id="qi-strength" placeholder="項目を追加..."><button onclick="addQ('strength','qi-strength')">＋ 追加</button></div>
+        <div class="free-note"><label>メモ・気づいた強み（ヒアリング中に感じたこと）</label><textarea id="fn-strength" placeholder="本人が気づいていない強み・コピーに使えそうな言葉など"></textarea></div>
+      </div>
+
+      <!-- B4: ターゲット -->
+      <div class="sblock" id="b4">
+        <div class="sblock-title">ターゲット</div>
+        <div class="sblock-desc">現在のお客様像と、今後きてほしいお客様像を整理します</div>
+        <div class="toggle-all-row">
+          <button class="toggle-all-btn" onclick="openAll('b4')">すべて開く</button>
+          <button class="toggle-all-btn" onclick="closeAll('b4')">すべて閉じる</button>
+        </div>
+        <div class="itabs">
+          <div class="itab on" onclick="switchHTab('tgt','cur',this)">現在のターゲット</div>
+          <div class="itab" onclick="switchHTab('tgt','fut',this)">今後きてほしいターゲット</div>
+        </div>
+        <div class="itpane on" id="itp-tgt-cur">
+          <div class="q-group" id="qg-tgt-cur"></div>
+          <div class="add-q-row"><input id="qi-tgt-cur" placeholder="項目を追加..."><button onclick="addQ('tgt-cur','qi-tgt-cur')">＋ 追加</button></div>
+          <div class="free-note"><label>メモ・補足</label><textarea id="fn-tgt-cur"></textarea></div>
+        </div>
+        <div class="itpane" id="itp-tgt-fut">
+          <div class="q-group" id="qg-tgt-fut"></div>
+          <div class="add-q-row"><input id="qi-tgt-fut" placeholder="項目を追加..."><button onclick="addQ('tgt-fut','qi-tgt-fut')">＋ 追加</button></div>
+          <div class="free-note"><label>メモ・補足</label><textarea id="fn-tgt-fut"></textarea></div>
+        </div>
+      </div>
+
+      <!-- B5: 購買心理 -->
+      <div class="sblock" id="b5">
+        <div class="sblock-title">購買心理・意思決定</div>
+        <div class="sblock-desc">お客様が選ぶ瞬間の気持ち・迷いを理解します</div>
+        <div class="toggle-all-row">
+          <button class="toggle-all-btn" onclick="openAll('b5')">すべて開く</button>
+          <button class="toggle-all-btn" onclick="closeAll('b5')">すべて閉じる</button>
+        </div>
+        <div class="q-group" id="qg-insight"></div>
+        <div class="add-q-row"><input id="qi-insight" placeholder="項目を追加..."><button onclick="addQ('insight','qi-insight')">＋ 追加</button></div>
+        <div class="free-note"><label>メモ・コピーに使えそうな言葉</label><textarea id="fn-insight" placeholder="ヒアリング中に出た「生の言葉」「刺さる表現」をここに残しておく"></textarea></div>
+      </div>
+
+      <!-- B6: 制作物別 -->
+      <div class="sblock" id="b6">
+        <div class="sblock-title">制作物の詳細</div>
+        <div class="sblock-desc">制作物ごとの仕様・要件を確認します</div>
+        <div class="itabs">
+          <div class="itab on" onclick="switchHTab('med','web',this)">Web / LP</div>
+          <div class="itab" onclick="switchHTab('med','logo',this)">ロゴ</div>
+          <div class="itab" onclick="switchHTab('med','print',this)">チラシ・名刺</div>
+          <div class="itab" onclick="switchHTab('med','line',this)">LINE / SNS</div>
+          <div class="itab" onclick="switchHTab('med','itc',this)">ITコンサル（ヒアリング）</div>
+          <div class="itab" onclick="switchHTab('med','its',this)">Web診断（自分でチェック）</div>
+        </div>
+        <div class="itpane on" id="itp-med-web">
+          <div class="toggle-all-row"><button class="toggle-all-btn" onclick="openAll('b6-web')">すべて開く</button><button class="toggle-all-btn" onclick="closeAll('b6-web')">すべて閉じる</button></div>
+          <div class="q-group" id="qg-web"></div>
+          <div class="add-q-row"><input id="qi-web" placeholder="項目を追加..."><button onclick="addQ('web','qi-web')">＋ 追加</button></div>
+          <div class="free-note"><label>メモ・補足</label><textarea id="fn-web"></textarea></div>
+        </div>
+        <div class="itpane" id="itp-med-logo">
+          <div class="toggle-all-row"><button class="toggle-all-btn" onclick="openAll('b6-logo')">すべて開く</button><button class="toggle-all-btn" onclick="closeAll('b6-logo')">すべて閉じる</button></div>
+          <div class="q-group" id="qg-logo"></div>
+          <div class="add-q-row"><input id="qi-logo" placeholder="項目を追加..."><button onclick="addQ('logo','qi-logo')">＋ 追加</button></div>
+          <div class="free-note"><label>メモ・補足</label><textarea id="fn-logo"></textarea></div>
+        </div>
+        <div class="itpane" id="itp-med-print">
+          <div class="toggle-all-row"><button class="toggle-all-btn" onclick="openAll('b6-print')">すべて開く</button><button class="toggle-all-btn" onclick="closeAll('b6-print')">すべて閉じる</button></div>
+          <div class="q-group" id="qg-print"></div>
+          <div class="add-q-row"><input id="qi-print" placeholder="項目を追加..."><button onclick="addQ('print','qi-print')">＋ 追加</button></div>
+          <div class="free-note"><label>メモ・補足</label><textarea id="fn-print"></textarea></div>
+        </div>
+        <div class="itpane" id="itp-med-line">
+          <div class="toggle-all-row"><button class="toggle-all-btn" onclick="openAll('b6-line')">すべて開く</button><button class="toggle-all-btn" onclick="closeAll('b6-line')">すべて閉じる</button></div>
+          <div class="q-group" id="qg-line"></div>
+          <div class="add-q-row"><input id="qi-line" placeholder="項目を追加..."><button onclick="addQ('line','qi-line')">＋ 追加</button></div>
+          <div class="free-note"><label>メモ・補足</label><textarea id="fn-line"></textarea></div>
+        </div>
+        <div class="itpane" id="itp-med-itc">
+          <div class="it-banner client">👤 クライアントへの質問 — 現状のWeb・IT環境についてヒアリングします</div>
+          <div class="toggle-all-row"><button class="toggle-all-btn" onclick="openAll('b6-itc')">すべて開く</button><button class="toggle-all-btn" onclick="closeAll('b6-itc')">すべて閉じる</button></div>
+          <div class="q-group" id="qg-itc"></div>
+          <div class="add-q-row"><input id="qi-itc" placeholder="項目を追加..."><button onclick="addQ('itc','qi-itc')">＋ 追加</button></div>
+          <div class="free-note"><label>メモ・補足</label><textarea id="fn-itc"></textarea></div>
+        </div>
+        <div class="itpane" id="itp-med-its">
+          <div class="it-banner self">🔍 自分でチェックする診断項目 — クライアントには聞かず自分で調査・確認します</div>
+          <table class="check-tbl">
+            <thead><tr><th style="width:180px">チェック項目</th><th style="width:130px">状態</th><th>確認内容・メモ</th></tr></thead>
+            <tbody id="it-check-body"></tbody>
+          </table>
+          <button class="toggle-all-btn" onclick="addCheckRow()" style="margin-bottom:10px">＋ 項目を追加</button>
+          <div class="free-note"><label>診断サマリー・提案の切り口</label><textarea id="fn-its" placeholder="調査全体の所感・優先課題・提案ポイントなど" style="min-height:90px"></textarea></div>
+        </div>
+      </div>
+
+      <!-- B7: 競合・参考 -->
+      <div class="sblock" id="b7">
+        <div class="sblock-title">競合・参考サイト</div>
+        <div class="sblock-desc">意識している競合と参考にしたいサイトを確認します</div>
+        <div class="toggle-all-row">
+          <button class="toggle-all-btn" onclick="openAll('b7')">すべて開く</button>
+          <button class="toggle-all-btn" onclick="closeAll('b7')">すべて閉じる</button>
+        </div>
+        <div class="q-group" id="qg-comp"></div>
+        <div class="add-q-row"><input id="qi-comp" placeholder="項目を追加..."><button onclick="addQ('comp','qi-comp')">＋ 追加</button></div>
+        <div class="subsec" style="margin-top:14px">
+          <div class="subsec-title">比較・相見積もり状況</div>
+          <div id="h-comp-rows"></div>
+          <button class="toggle-all-btn" onclick="addHCompRow()" style="margin-top:4px">＋ 会社を追加</button>
+        </div>
+        <div class="free-note"><label>メモ・補足</label><textarea id="fn-comp"></textarea></div>
+      </div>
+
+      <!-- B8: 発注・スケジュール -->
+      <div class="sblock" id="b8">
+        <div class="sblock-title">発注・スケジュール</div>
+        <div class="sblock-desc">希望スケジュール・予算・発注の判断軸を確認します</div>
+        <div class="toggle-all-row">
+          <button class="toggle-all-btn" onclick="openAll('b8')">すべて開く</button>
+          <button class="toggle-all-btn" onclick="closeAll('b8')">すべて閉じる</button>
+        </div>
+        <div class="q-group" id="qg-order"></div>
+        <div class="add-q-row"><input id="qi-order" placeholder="項目を追加..."><button onclick="addQ('order','qi-order')">＋ 追加</button></div>
+        <div class="free-note"><label>メモ・補足・その他施策の相談</label><textarea id="fn-order"></textarea></div>
+      </div>
+
+      <!-- B9: ネクストアクション -->
+      <div class="sblock" id="b9">
+        <div class="sblock-title">ネクストアクション</div>
+        <div class="sblock-desc">MTG後の動きを確認します</div>
+        <div class="na-list" id="na-list"></div>
+        <button class="toggle-all-btn" onclick="addNA()" style="margin-top:8px">＋ 追加</button>
+        <div class="free-note"><label>やりとりの手段・支援体制</label><textarea id="fn-next" placeholder="Slack / Chatwork / LINE / メール / 決裁者の確認など"></textarea></div>
+      </div>
+
+      <!-- 自動入力ボタン -->
+      <button class="auto-btn" onclick="autoFill()">
+        <span class="auto-icon">✨</span>
+        ヒアリング内容から目的・ターゲット・ペルソナ・競合を自動入力する
+      </button>
+      <div id="auto-result" class="auto-result" style="display:none"></div>
+
+      <div class="navbar">
+        <button class="btn btn-o" onclick="go('p1')">← 戻る</button>
+        <button class="btn btn-p" onclick="go('p2')">目的・ゴールへ →</button>
+      </div>
+
+    </div><!-- /h-content -->
+  </div><!-- /h-layout -->
+</div>
+
+<!-- ===== P2: 目的・ゴール ===== -->
+<div class="page" id="p2">
+  <div class="phead">
+    <div class="eyebrow">Phase A — 02</div>
+    <h1 class="ptitle">目的・ゴール設定</h1>
+    <div class="pdesc">As Is / To Be / Mission と施策の方向性を整理します</div>
+  </div>
+  <div class="progress"><div class="pfill" style="width:34%"></div></div>
+
+  <div class="card">
+    <div class="ctitle">プロジェクトの目的・ゴール</div>
+    <div id="goals-list" class="blist"></div>
+    <button class="btn-add" onclick="addBullet('goals-list','goals')" style="margin-top:8px">＋ ゴールを追加</button>
+  </div>
+
+  <div class="card">
+    <div class="ctitle">As Is / To Be / Mission</div>
+    <div class="atgrid">
+      <div class="at-card at-asis">
+        <div class="at-title">As Is</div><div class="at-sub">現状・課題</div>
+        <div id="asis-list" class="blist"></div>
+        <button class="btn-add" onclick="addBullet('asis-list','asis')" style="margin-top:6px;font-size:10px;padding:5px">＋</button>
+      </div>
+      <div class="at-card at-tobe">
+        <div class="at-title">To Be</div><div class="at-sub">ありたい姿</div>
+        <div id="tobe-list" class="blist"></div>
+        <button class="btn-add" onclick="addBullet('tobe-list','tobe')" style="margin-top:6px;font-size:10px;padding:5px">＋</button>
+      </div>
+      <div class="at-card at-mission">
+        <div class="at-title">Mission</div><div class="at-sub">上位目標</div>
+        <textarea id="mission_text" placeholder="例：能登で暮らす女性が、少しでも自分らしく呼吸できる時間を支える。" style="min-height:90px;font-size:11px;background:transparent;border:1px solid rgba(0,0,0,.1)"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ctitle">施策</div>
+    <div id="tactics-list" class="tlist"></div>
+    <button class="btn-add" onclick="addTactic()" style="margin-top:8px">＋ 施策を追加</button>
+  </div>
+
+  <div class="navbar">
+    <button class="btn btn-o" onclick="go('p1b')">← 戻る</button>
+    <button class="btn btn-p" onclick="go('p3')">次へ →</button>
+  </div>
+</div>
+
+<!-- ===== P3: ターゲット ===== -->
+<div class="page" id="p3">
+  <div class="phead">
+    <div class="eyebrow">Phase B — 03</div>
+    <h1 class="ptitle">ターゲット</h1>
+    <div class="pdesc">ヒアリング内容から自動入力されています。必要に応じて修正してください。</div>
+  </div>
+  <div class="progress"><div class="pfill" style="width:50%"></div></div>
+
+  <div class="card">
+    <div class="ctitle">基本属性</div>
+    <div class="g2">
+      <div class="field"><label class="flabel">年齢層</label>
+        <div class="chips" id="age-chips">
+          <div class="chip" onclick="toggleChip(this,'age')">10代</div><div class="chip" onclick="toggleChip(this,'age')">20代</div>
+          <div class="chip" onclick="toggleChip(this,'age')">30代</div><div class="chip" onclick="toggleChip(this,'age')">40代</div>
+          <div class="chip" onclick="toggleChip(this,'age')">50代以上</div>
+        </div>
+      </div>
+      <div class="field"><label class="flabel">性別イメージ</label>
+        <div class="chips" id="gender-chips">
+          <div class="chip" onclick="toggleChip(this,'gender')">男性寄り</div>
+          <div class="chip" onclick="toggleChip(this,'gender')">女性寄り</div>
+          <div class="chip" onclick="toggleChip(this,'gender')">ユニセックス</div>
+        </div>
+      </div>
+    </div>
+    <div class="field"><label class="flabel">ターゲット像</label><textarea id="target_desc" placeholder="ヒアリング後に自動入力されます"></textarea></div>
+    <div class="field"><label class="flabel">ターゲットの行動・情報収集の特徴</label><textarea id="target_behavior" placeholder="例：スマホでInstagram・Google検索が主な情報収集手段" style="min-height:52px"></textarea></div>
+  </div>
+
+  <div class="card">
+    <div class="ctitle">イメージキーワード</div>
+    <div class="field"><label class="flabel">表現したいイメージ</label>
+      <div class="chips" id="image-chips">
+        <div class="chip" onclick="toggleChip(this,'image')">ナチュラル</div><div class="chip" onclick="toggleChip(this,'image')">エレガント</div>
+        <div class="chip" onclick="toggleChip(this,'image')">モダン</div><div class="chip" onclick="toggleChip(this,'image')">クール</div>
+        <div class="chip" onclick="toggleChip(this,'image')">カジュアル</div><div class="chip" onclick="toggleChip(this,'image')">ポップ</div>
+        <div class="chip" onclick="toggleChip(this,'image')">高級感</div><div class="chip" onclick="toggleChip(this,'image')">信頼感</div>
+        <div class="chip" onclick="toggleChip(this,'image')">親しみやすい</div><div class="chip" onclick="toggleChip(this,'image')">スタイリッシュ</div>
+        <div class="chip" onclick="toggleChip(this,'image')">プロフェッショナル</div><div class="chip" onclick="toggleChip(this,'image')">フェミニン</div>
+        <div class="chip" onclick="toggleChip(this,'image')">温かみ</div><div class="chip" onclick="toggleChip(this,'image')">安心感</div>
+        <div class="chip" onclick="toggleChip(this,'image')">ミニマル</div><div class="chip" onclick="toggleChip(this,'image')">クラシック</div>
+      </div>
+    </div>
+    <div class="field"><label class="flabel">避けたいイメージ</label><input type="text" id="avoid_image" placeholder="例：チープな、古い、派手すぎる"></div>
+  </div>
+
+  <div class="navbar">
+    <button class="btn btn-o" onclick="go('p2')">← 戻る</button>
+    <button class="btn btn-p" onclick="go('p4')">次へ →</button>
+  </div>
+</div>
+
+<!-- ===== P4: ペルソナ / CJM ===== -->
+<div class="page" id="p4">
+  <div class="phead">
+    <div class="eyebrow">Phase B — 04</div>
+    <h1 class="ptitle">ペルソナ / カスタマージャーニーマップ</h1>
+    <div class="pdesc">ヒアリング内容から自動生成されています。必要に応じて修正してください。</div>
+  </div>
+  <div class="progress"><div class="pfill" style="width:62%"></div></div>
+
+  <div class="card">
+    <div class="ctitle">ペルソナ設定</div>
+    <div class="g2">
+      <div class="field"><label class="flabel">名前（仮名）</label><input type="text" id="persona_name" placeholder="例：田中 美佐子"></div>
+      <div class="field"><label class="flabel">年齢・職業</label><input type="text" id="persona_job" placeholder="例：38歳・パート主婦"></div>
+      <div class="field"><label class="flabel">居住地・家族構成</label><input type="text" id="persona_family" placeholder="例：石川県能登町・夫と子2人"></div>
+      <div class="field"><label class="flabel">収入・生活スタイル</label><input type="text" id="persona_lifestyle" placeholder="例：世帯年収400万・車移動・スマホ主体"></div>
+    </div>
+    <div class="g2" style="margin-top:4px">
+      <div class="field"><label class="flabel">悩み・課題</label><textarea id="persona_pain" placeholder="自動入力されます"></textarea></div>
+      <div class="field"><label class="flabel">望んでいること・ゴール</label><textarea id="persona_goal" placeholder="自動入力されます"></textarea></div>
+      <div class="field"><label class="flabel">情報収集の行動</label><textarea id="persona_behavior" placeholder="自動入力されます"></textarea></div>
+      <div class="field"><label class="flabel">このサービスへの一言</label><textarea id="persona_quote" placeholder="自動入力されます"></textarea></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ctitle">カスタマージャーニーマップ</div>
+    <div class="journey-wrap">
+      <table class="jtable">
+        <thead>
+          <tr>
+            <th class="rh">フェーズ</th>
+            <th>認知</th><th>興味・検討</th><th>決定・行動</th><th>利用・継続</th>
+          </tr>
+        </thead>
+        <tbody id="cjm-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="navbar">
+    <button class="btn btn-o" onclick="go('p3')">← 戻る</button>
+    <button class="btn btn-p" onclick="go('p5')">次へ →</button>
+  </div>
+</div>
+
+<!-- ===== P5: 競合調査 ===== -->
+<div class="page" id="p5">
+  <div class="phead">
+    <div class="eyebrow">Phase C — 05</div>
+    <h1 class="ptitle">競合調査</h1>
+    <div class="pdesc">業種・地域に応じた調査ヒントを参考にしながら、競合情報を入力します</div>
+  </div>
+  <div class="progress"><div class="pfill" style="width:74%"></div></div>
+
+  <div class="hint-box" id="comp-hint-box">
+    <div class="hint-title">🔍 調査ヒント（業種・地域から自動生成）</div>
+    <div class="hint-kw" id="comp-hint-kw"></div>
+    <div class="hint-points" id="comp-hint-points"></div>
+  </div>
+
+  <div id="comp-container"></div>
+  <button class="btn-add" onclick="addComp()">＋ 競合を追加</button>
+
+  <div class="navbar">
+    <button class="btn btn-o" onclick="go('p4')">← 戻る</button>
+    <button class="btn btn-p" onclick="go('p6')">次へ →</button>
+  </div>
+</div>
+
+<!-- ===== P6: 参考サイト集 ===== -->
+<div class="page" id="p6">
+  <div class="phead">
+    <div class="eyebrow">Phase C — 06</div>
+    <h1 class="ptitle">参考サイト集</h1>
+    <div class="pdesc">制作物ごとに参考URLとクライアントコメントを登録します</div>
+  </div>
+  <div class="progress"><div class="pfill" style="width:84%"></div></div>
+
+  <div class="card">
+    <div class="ctitle">CSVインポート</div>
+    <div class="import-zone" onclick="document.getElementById('csvFile').click()" ondragover="event.preventDefault()" ondrop="handleDrop(event)">
+      <p>クリックまたはCSVをドラッグ＆ドロップ</p>
+      <small>列順：種別 / URL / タイトル / クライアントコメント / 自分のメモ</small>
+      <input type="file" id="csvFile" accept=".csv" style="display:none" onchange="handleCSV(this)">
+    </div>
+    <a href="#" onclick="dlCSVTemplate(event)" style="font-size:11px;color:var(--accent)">📥 CSVテンプレートをダウンロード</a>
+  </div>
+
+  <div class="card">
+    <div class="ctitle">参考サイト一覧</div>
+    <div style="margin-bottom:9px;display:flex;gap:6px;flex-wrap:wrap" id="ref-filter"></div>
+    <table class="rtable" id="refTable">
+      <thead><tr>
+        <th style="width:80px">種別</th>
+        <th style="width:160px">URL</th>
+        <th style="width:100px">タイトル</th>
+        <th>クライアントコメント</th>
+        <th>自分のメモ</th>
+        <th style="width:52px">画像</th>
+        <th style="width:36px"></th>
+      </tr></thead>
+      <tbody id="refBody"></tbody>
+    </table>
+    <div class="ref-type-chips">
+      <span style="font-size:11px;color:var(--text3);white-space:nowrap;margin-right:2px">行を追加：</span>
+      <button class="ref-type-chip" onclick="addRef('コーポレート')">＋ コーポレート</button>
+      <button class="ref-type-chip" onclick="addRef('LP')">＋ LP</button>
+      <button class="ref-type-chip" onclick="addRef('採用')">＋ 採用</button>
+      <button class="ref-type-chip" onclick="addRef('ロゴ')">＋ ロゴ</button>
+      <button class="ref-type-chip" onclick="addRef('チラシ')">＋ チラシ</button>
+      <button class="ref-type-chip" onclick="addRef('LINE')">＋ LINE</button>
+      <button class="ref-type-chip" onclick="addRef('SNS')">＋ SNS</button>
+      <button class="ref-type-chip" onclick="addRef('その他')">＋ その他</button>
+    </div>
+  </div>
+
+  <div class="navbar">
+    <button class="btn btn-o" onclick="go('p5')">← 戻る</button>
+    <button class="btn btn-p" onclick="go('p7')">次へ →</button>
+  </div>
+</div>
+
+<!-- ===== P7: トンマナ ===== -->
+<div class="page" id="p7">
+  <div class="phead">
+    <div class="eyebrow">Phase D — 07</div>
+    <h1 class="ptitle">トンマナ</h1>
+    <div class="pdesc">イメージスケールとカラーパレットを設定します</div>
+  </div>
+  <div class="progress"><div class="pfill" style="width:93%"></div></div>
+
+  <div class="g2" style="gap:18px;align-items:start">
+    <div class="card" style="margin-bottom:0">
+      <div class="ctitle">言語イメージスケール</div>
+      <div class="field">
+        <label class="flabel">ヒアリングキーワード</label>
+        <textarea id="iw-hearing-input" style="min-height:52px" placeholder="ヒアリングで出てきた言葉を入力（例：信頼感、清潔、モダン、かわいい）"></textarea>
+        <button class="btn btn-o" style="margin-top:6px;font-size:12px;width:fit-content" onclick="analyzeHearingKeywords()">スケールに反映</button>
+      </div>
+      <div class="scale-wrap" id="scaleMap" style="cursor:default;max-width:100%">
+        <div class="sax-h"></div><div class="sax-v"></div>
+        <div class="slbl t">SOFT</div><div class="slbl b">HARD</div>
+        <div class="slbl l">WARM</div><div class="slbl r">COOL</div>
+        <div id="iw-words-layer"></div>
+        <div class="iw-pin" id="iw-pin" style="display:none"></div>
+      </div>
+      <div class="iw-tone-row" style="margin-top:10px">
+        <span style="font-size:10px;color:var(--text3);margin-right:2px">カラートーン（CLEAR→GRAYISH）：</span>
+        <button class="iw-tone-btn" onclick="setIwTone('vivid',this)">ビビッド</button>
+        <button class="iw-tone-btn on" onclick="setIwTone('light',this)">ライト</button>
+        <button class="iw-tone-btn" onclick="setIwTone('soft',this)">ソフト</button>
+        <button class="iw-tone-btn" onclick="setIwTone('muted',this)">ミュート</button>
+        <button class="iw-tone-btn" onclick="setIwTone('grayish',this)">グレイッシュ</button>
+      </div>
+      <div id="iw-zone-result" style="margin-top:12px">
+        <p style="color:var(--text3);font-size:12px">言葉をタップ、またはキーワードを入力して「スケールに反映」してください</p>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="card" style="margin-bottom:0">
+        <div class="ctitle">カラーパレット</div>
+        <div class="field"><div class="flabel" style="font-size:10px">メインカラー</div><div class="pal-row" id="pal-main"><div class="sw-add"><span>+</span><input type="color" value="#2c4a3e" onchange="addColor('main',this.value)"></div></div></div>
+        <div class="field"><div class="flabel" style="font-size:10px">サブカラー</div><div class="pal-row" id="pal-sub"><div class="sw-add"><span>+</span><input type="color" value="#b5622a" onchange="addColor('sub',this.value)"></div></div></div>
+        <div class="field"><div class="flabel" style="font-size:10px">アクセント</div><div class="pal-row" id="pal-accent"><div class="sw-add"><span>+</span><input type="color" value="#f5f3ef" onchange="addColor('accent',this.value)"></div></div></div>
+        <div class="field" style="margin-bottom:0"><div class="flabel" style="font-size:10px">テキストカラー</div><div class="pal-row" id="pal-text"><div class="sw-add"><span>+</span><input type="color" value="#1c1917" onchange="addColor('text',this.value)"></div></div></div>
+      </div>
+      <div class="card" style="margin-bottom:0">
+        <div class="ctitle">フォント方針</div>
+        <div class="field"><label class="flabel">見出し</label><input type="text" id="font_heading" placeholder="例：Shippori Mincho / 游明朝"></div>
+        <div class="field" style="margin-bottom:0"><label class="flabel">本文</label><input type="text" id="font_body" placeholder="例：Noto Sans JP"></div>
+      </div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <div class="ctitle">その他メモ</div>
+    <textarea id="tonmana_memo" placeholder="写真の方向性・イラストの有無・角丸・余白感など"></textarea>
+  </div>
+
+  <div class="navbar">
+    <button class="btn btn-o" onclick="go('p6')">← 戻る</button>
+    <button class="btn btn-p" onclick="go('p8')">まとめへ →</button>
+  </div>
+</div>
+
+<!-- ===== P8: 出力 ===== -->
+<div class="page" id="p8">
+  <div class="phead">
+    <div class="eyebrow">Output</div>
+    <h1 class="ptitle">まとめ出力</h1>
+    <div class="pdesc">入力した情報を方針書として確認・コピーできます</div>
+  </div>
+  <div class="progress"><div class="pfill" style="width:100%"></div></div>
+  <div id="output-container"></div>
+  <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:18px">
+    <button class="btn btn-o" onclick="copyOutput()">📋 テキストをコピー</button>
+    <button class="btn btn-p" onclick="genPrompt()">✨ Claudeへ深掘りプロンプト</button>
+    <button class="btn btn-o" onclick="genFigmaPrompt()">🎨 Figmaスライドプロンプト生成</button>
+    <button class="btn btn-o" onclick="go('p1')">← 最初から</button>
+  </div>
+  <!-- Figma Prompt Output -->
+  <div id="figma-prompt-wrap" style="display:none;margin-top:18px">
+    <div class="card" style="margin-bottom:0">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div class="ctitle" style="margin-bottom:0">Figmaスライド作成プロンプト</div>
+        <button id="figma-copy-btn" class="btn btn-o" style="font-size:12px;padding:5px 14px" onclick="copyFigmaPrompt()">📋 コピー</button>
+      </div>
+      <p style="font-size:11px;color:var(--text3);margin-bottom:10px">このプロンプトをClaudeやFigma AIに貼り付けると、スライドデッキの設計・作成指示として使えます。</p>
+      <pre id="figma-prompt-out" class="min-prompt-box" style="max-height:380px"></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ===== P9: アクセシビリティ ===== -->
+<div class="page" id="p9">
+  <div class="phead">
+    <div class="eyebrow">Phase D — Accessibility</div>
+    <h1 class="ptitle">アクセシビリティチェック</h1>
+    <div class="pdesc">WCAG 2.1基準でコントラスト比と実装チェックを行います</div>
+  </div>
+  <div class="progress"><div class="pfill" style="width:88%"></div></div>
+
+  <!-- コントラスト比チェック -->
+  <div class="card">
+    <div class="ctitle">コントラスト比チェック</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:12px">トンマナタブで登録したカラーパレットを自動読み込みします</div>
+    <div class="a11y-contrast-wrap">
+      <div class="a11y-row">
+        <div class="field" style="margin-bottom:0;flex:1">
+          <label class="flabel">文字色</label>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input type="color" id="cr-fg" value="#1c1917" oninput="calcContrast()" style="width:36px;height:32px;border:1px solid var(--border);border-radius:5px;cursor:pointer;padding:2px">
+            <input type="text" id="cr-fg-hex" value="#1c1917" oninput="syncColorFromHex('cr-fg','cr-fg-hex')" style="width:80px;font-size:12px">
+          </div>
+          <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px" id="cr-fg-presets"></div>
+        </div>
+        <div class="field" style="margin-bottom:0;flex:1">
+          <label class="flabel">背景色</label>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input type="color" id="cr-bg" value="#ffffff" oninput="calcContrast()" style="width:36px;height:32px;border:1px solid var(--border);border-radius:5px;cursor:pointer;padding:2px">
+            <input type="text" id="cr-bg-hex" value="#ffffff" oninput="syncColorFromHex('cr-bg','cr-bg-hex')" style="width:80px;font-size:12px">
+          </div>
+          <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px" id="cr-bg-presets"></div>
+        </div>
+      </div>
+      <div class="a11y-preview" id="cr-preview">
+        <span id="cr-preview-text">サンプルテキスト / Sample Text 123</span>
+      </div>
+      <div class="a11y-result-box" id="cr-result">
+        <div class="cr-ratio" id="cr-ratio">—</div>
+        <div class="cr-badges" id="cr-badges"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WCAGチェックリスト -->
+  <div class="card">
+    <div class="ctitle">WCAGチェックリスト</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+      <button class="wcag-filter on" onclick="setWcagFilter('全て',this)">全て</button>
+      <button class="wcag-filter" onclick="setWcagFilter('未確認',this)">未確認</button>
+      <button class="wcag-filter ok" onclick="setWcagFilter('OK',this)">✓ OK</button>
+      <button class="wcag-filter ng" onclick="setWcagFilter('NG',this)">✗ NG</button>
+    </div>
+    <div id="wcag-summary-bar" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap"></div>
+    <div id="wcag-list"></div>
+  </div>
+
+  <!-- ディレクターリリース前チェックリスト -->
+  <div class="card">
+    <div class="ctitle">ディレクターリリース前チェックリスト</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:12px">アクセシビリティ以外のリリース前に確認すべき項目です。優先度（高・中・低）順に確認してください</div>
+    <div id="dir-summary-bar" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap"></div>
+    <div id="director-list"></div>
+  </div>
+
+  <!-- 結果サマリー・プロンプト -->
+  <div class="card">
+    <div class="ctitle">WCAGチェック結果・アクションプラン</div>
+    <div id="a11y-summary"></div>
+    <button class="btn btn-p" onclick="genA11yPrompt()" style="margin-top:10px">✨ 問題点をClaudeに解決させる</button>
+  </div>
+
+  <div class="navbar">
+    <button class="btn btn-o" onclick="go('p7')">← 戻る</button>
+    <button class="btn btn-p" onclick="go('p8')">まとめ出力へ →</button>
+  </div>
+</div>
+
+
+<!-- ===== P10: スケジュール ===== -->
+<div class="page" id="p10">
+  <div class="phead">
+    <div class="eyebrow">Phase E — Schedule</div>
+    <h1 class="ptitle">スケジュール</h1>
+    <div class="pdesc">キックオフ日を起点に制作タスクを管理します</div>
+  </div>
+
+  <!-- Controls -->
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:8px">
+        <label class="flabel" style="margin:0;white-space:nowrap;font-size:12px">キックオフ日</label>
+        <input type="date" id="sch-kickoff" style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);font-family:'Noto Sans JP',sans-serif" onchange="onSchKickoffChange(this.value)">
+      </div>
+      <button class="btn btn-o" onclick="openSchGroupModal()">＋ グループ追加</button>
+      <button class="btn btn-o" onclick="exportScheduleCsv()">📊 CSV出力</button>
+    </div>
+    <div style="display:flex;gap:14px;align-items:center;margin-top:10px;font-size:11px;color:var(--text3)">
+      <div style="display:flex;align-items:center;gap:5px"><div style="width:16px;height:10px;border-radius:3px;background:#f9a8c4"></div>制作タスク</div>
+      <div style="display:flex;align-items:center;gap:5px"><div style="width:16px;height:10px;border-radius:3px;background:#93c5fd"></div>クライアントタスク</div>
+      <div style="display:flex;align-items:center;gap:5px">⭐ マイルストーン</div>
+      <div style="display:flex;align-items:center;gap:5px"><div style="width:2px;height:14px;background:#f472b6"></div>今日</div>
+    </div>
+  </div>
+
+  <!-- Gantt -->
+  <div class="card" style="padding:0;overflow:hidden">
+    <div class="gantt-scroll" id="gantt-wrap"></div>
+  </div>
+
+  <div class="navbar">
+    <button class="btn btn-o" onclick="go('p9')">← 戻る</button>
+    <button class="btn btn-p" onclick="go('p8')">まとめ出力へ →</button>
+  </div>
+
+  <!-- Task Modal -->
+  <div class="sch-overlay" id="sch-modal" style="display:none" onclick="if(event.target===this)closeSchModal()">
+    <div class="sch-modal-box">
+      <div class="sch-modal-title" id="sch-modal-title">タスクを追加</div>
+      <div class="field"><label class="flabel">タスク名</label>
+        <input type="text" id="sch-task-name" placeholder="例：ワイヤーフレーム作成"></div>
+      <div class="field"><label class="flabel">種別</label>
+        <select id="sch-task-type" class="sch-sel">
+          <option value="production">制作</option>
+          <option value="client">クライアント</option>
+        </select></div>
+      <div class="field"><label class="flabel">ステータス</label>
+        <select id="sch-task-status" class="sch-sel">
+          <option value="未対応">未対応</option>
+          <option value="対応中">対応中</option>
+          <option value="完了">完了</option>
+        </select></div>
+      <div class="g2" style="gap:10px">
+        <div class="field"><label class="flabel">開始日</label><input type="date" id="sch-task-start"></div>
+        <div class="field"><label class="flabel">終了日</label><input type="date" id="sch-task-end"></div>
+      </div>
+      <div class="field" style="margin-bottom:0"><label class="flabel">マイルストーン（任意）</label>
+        <input type="text" id="sch-task-ms" placeholder="例：レビュー、公開"></div>
+      <div class="sch-modal-footer">
+        <button class="btn" id="sch-delete-btn" onclick="deleteSchTask()" style="color:var(--danger);border-color:var(--danger)">削除</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-o" onclick="closeSchModal()">キャンセル</button>
+          <button class="btn btn-p" onclick="saveSchModal()">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Group Modal -->
+  <div class="sch-overlay" id="sch-group-modal" style="display:none" onclick="if(event.target===this)closeSchGroupModal()">
+    <div class="sch-modal-box">
+      <div class="sch-modal-title">グループを追加</div>
+      <div class="field"><label class="flabel">グループ名</label>
+        <input type="text" id="sch-group-name" placeholder="例：Webサイト / クライアント名"></div>
+      <div class="field" style="margin-bottom:0"><label class="flabel">テンプレート（任意）</label>
+        <select id="sch-group-preset" class="sch-sel">
+          <option value="">なし（空のグループ）</option>
+          <option value="Webサイト制作">Webサイト制作</option>
+          <option value="LP制作">LP制作</option>
+          <option value="バナー制作">バナー制作</option>
+          <option value="チラシ制作">チラシ制作</option>
+        </select></div>
+      <div class="sch-modal-footer" style="justify-content:flex-end">
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-o" onclick="closeSchGroupModal()">キャンセル</button>
+          <button class="btn btn-p" onclick="saveSchGroup()">追加</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== P11: 議事録 ===== -->
+<div class="page" id="p11">
+  <div class="phead">
+    <div class="eyebrow">Tools</div>
+    <h1 class="ptitle">議事録</h1>
+    <div class="pdesc">ZoomのAI文字起こしをClaudeと連携して議事録に整理します</div>
+  </div>
+
+  <div class="card">
+    <div class="ctitle">ミーティング情報</div>
+    <div class="g2" style="gap:10px">
+      <div class="field"><label class="flabel">日付</label><input type="date" id="min-date"></div>
+      <div class="field"><label class="flabel">目的</label><input type="text" id="min-purpose" placeholder="例：初回ヒアリング、デザインレビュー"></div>
+    </div>
+    <div class="field" style="margin-bottom:0"><label class="flabel">参加者</label>
+      <input type="text" id="min-attendees" placeholder="例：田中（クライアント）、山田（ディレクター）"></div>
+  </div>
+
+  <div class="card">
+    <div class="ctitle">文字起こし / メモ</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:8px">ZoomのAI文字起こし、または手書きメモをそのまま貼り付けてください</div>
+    <textarea id="min-transcript" style="min-height:180px" placeholder="ここに文字起こしやメモを貼り付け..."></textarea>
+  </div>
+
+  <div class="card">
+    <div class="ctitle">Claude用プロンプト生成</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">ボタンを押してプロンプトを生成 → コピーしてClaudeに貼り付けてください</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <button class="btn btn-p" onclick="genMinPrompt()">議事録プロンプト生成</button>
+      <button class="btn btn-o" onclick="genHearingPrompt()">ヒアリング整理プロンプト生成</button>
+      <button class="btn btn-o" id="min-copy-btn" onclick="copyMinPrompt()" style="display:none">コピー</button>
+    </div>
+    <div id="min-prompt-wrap" style="display:none">
+      <div class="min-prompt-box" id="min-prompt-out"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ctitle">整理済み議事録</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Claudeからの回答をここに貼り付けて保存できます</div>
+    <textarea id="min-result" style="min-height:200px" placeholder="Claudeで生成した議事録をここに貼り付け..."></textarea>
+    <button class="btn btn-p" onclick="saveMinutes()" style="margin-top:10px">保存</button>
+  </div>
+
+  <div id="min-saved-wrap" style="display:none">
+    <div class="card">
+      <div class="ctitle">保存済み議事録</div>
+      <div id="min-saved-list"></div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
+</div><!-- /layout -->
+
+<script src="direction-app-v3.js"></script>
+<script src="direction-app-v3-tools.js"></script>
+<script src="direction-app-v3-schedule.js"></script>
+</body>
+</html>

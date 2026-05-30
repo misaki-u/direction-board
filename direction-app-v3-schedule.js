@@ -252,6 +252,7 @@ function renderGantt() {
       const isWip   = task.status === '対応中';
       const stsBadge = isDone ? '<span class="gantt-sts sts-done">完了</span>'
                      : isWip  ? '<span class="gantt-sts sts-wip">対応中</span>' : '';
+      const tipText = `${schFmtD(task.start)} 〜 ${schFmtD(task.end)}`;
 
       html += `<div class="gantt-row gantt-task-row">
         <div class="gantt-lbl gantt-task-lbl" style="height:${SCH_ROW_H}px">
@@ -267,7 +268,9 @@ function renderGantt() {
             data-gid="${group.id}" data-tid="${task.id}" data-status="${esc(task.status || '未対応')}"
             style="left:${barL}px;width:${barW}px;top:5px;height:${SCH_ROW_H - 10}px;cursor:grab"
             onmousedown="schDragStart(event,this)"
-            onmousemove="schDragCursor(event,this)">
+            onmousemove="schDragCursor(event,this);schMoveTip(event)"
+            onmouseenter="schShowTip(event,'${tipText}')"
+            onmouseleave="schHideTip()">
             <span class="gantt-bar-txt">${esc(task.name)}</span>
           </div>
           ${msHtml}
@@ -278,6 +281,39 @@ function renderGantt() {
 
   html += `</div>`;
   wrap.innerHTML = html;
+}
+
+// ─── Tooltip ────────────────────────────────────────────────
+const DOW_JA = ['日', '月', '火', '水', '木', '金', '土'];
+function schFmtD(s) {
+  const d = schToDate(s);
+  return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}（${DOW_JA[d.getDay()]}）`;
+}
+function _schTipEl() {
+  let el = document.getElementById('gantt-tip');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'gantt-tip';
+    el.style.cssText = 'display:none;position:fixed;z-index:9999;pointer-events:none;background:rgba(20,20,20,.88);color:#fff;font-size:11px;padding:5px 11px;border-radius:6px;white-space:nowrap;font-family:\'Noto Sans JP\',sans-serif;line-height:1.5';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+function schShowTip(e, text) {
+  const el = _schTipEl();
+  el.textContent = text;
+  el.style.display = 'block';
+  schMoveTip(e);
+}
+function schMoveTip(e) {
+  const el = document.getElementById('gantt-tip');
+  if (!el || el.style.display === 'none') return;
+  el.style.left = (e.clientX + 14) + 'px';
+  el.style.top  = (e.clientY - 42) + 'px';
+}
+function schHideTip() {
+  const el = document.getElementById('gantt-tip');
+  if (el) el.style.display = 'none';
 }
 
 function schGrid(weekCells, h) {
@@ -321,6 +357,7 @@ function schDragCursor(e, el) {
 
 function schDragStart(e, el) {
   e.preventDefault();
+  schHideTip();
   const relX    = e.clientX - el.getBoundingClientRect().left;
   const mode    = relX < 8 ? 'left' : relX > el.offsetWidth - 8 ? 'right' : 'move';
   const groupId = el.dataset.gid;

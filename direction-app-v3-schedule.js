@@ -70,10 +70,9 @@ function schAdd(str, n) { const d = schToDate(str); d.setDate(d.getDate() + n); 
 //   monthCells : [{month, year, days}]   ← 実際の暦日数
 //   weekCells  : [{weekNum, month, year, days, mondayStr}]
 function calcGanttHeaders(kickoffStr, totalDays) {
-  const kickoff     = schToDate(kickoffStr);
-  const monthCells  = [];
-  const weekCells   = [];
-  const weekCountMap = {};  // "year-month" → 何番目の週か
+  const kickoff    = schToDate(kickoffStr);
+  const monthCells = [];
+  const weekCells  = [];
 
   for (let day = 0; day < totalDays; day++) {
     const d = new Date(kickoff.getTime());
@@ -81,7 +80,6 @@ function calcGanttHeaders(kickoffStr, totalDays) {
 
     const month = d.getMonth() + 1;
     const year  = d.getFullYear();
-    const mKey  = `${year}-${month}`;
 
     // この日が属するカレンダー週の月曜日
     const dow = (d.getDay() + 6) % 7;  // 0=月 … 6=日
@@ -105,10 +103,15 @@ function calcGanttHeaders(kickoffStr, totalDays) {
       || last.month !== month;
 
     if (needNew) {
-      if (!weekCountMap[mKey]) weekCountMap[mKey] = 0;
-      weekCountMap[mKey]++;
-      weekCells.push({ mondayStr, month, year,
-                       weekNum: weekCountMap[mKey], days: 1 });
+      // その月の1日が属するカレンダー週の月曜日を求め、
+      // 何週目かを「月曜日の差分÷7」で計算する
+      const firstOfMonth = new Date(`${year}-${String(month).padStart(2, '0')}-01T00:00:00`);
+      const dowFirst = (firstOfMonth.getDay() + 6) % 7;
+      const firstMonday = new Date(firstOfMonth.getTime());
+      firstMonday.setDate(1 - dowFirst);
+      const weekNum = Math.round((monday.getTime() - firstMonday.getTime()) / (7 * 86400000)) + 1;
+
+      weekCells.push({ mondayStr, month, year, weekNum, days: 1 });
     } else {
       last.days++;
     }

@@ -64,6 +64,59 @@ function schToStr(date) { return date.toISOString().slice(0, 10); }
 function schDiff(a, b)  { return Math.round((schToDate(b) - schToDate(a)) / 86400000); }
 function schAdd(str, n) { const d = schToDate(str); d.setDate(d.getDate() + n); return schToStr(d); }
 
+// ─── カレンダー週ベースのヘッダー計算 ───────────────────────
+// 月〜日を1週間とし、月をまたぐ週は月ごとに分割する。
+// 返り値:
+//   monthCells : [{month, year, days}]   ← 実際の暦日数
+//   weekCells  : [{weekNum, month, year, days, mondayStr}]
+function calcGanttHeaders(kickoffStr, totalDays) {
+  const kickoff     = schToDate(kickoffStr);
+  const monthCells  = [];
+  const weekCells   = [];
+  const weekCountMap = {};  // "year-month" → 何番目の週か
+
+  for (let day = 0; day < totalDays; day++) {
+    const d = new Date(kickoff.getTime());
+    d.setDate(d.getDate() + day);
+
+    const month = d.getMonth() + 1;
+    const year  = d.getFullYear();
+    const mKey  = `${year}-${month}`;
+
+    // この日が属するカレンダー週の月曜日
+    const dow = (d.getDay() + 6) % 7;  // 0=月 … 6=日
+    const monday = new Date(d.getTime());
+    monday.setDate(d.getDate() - dow);
+    const mondayStr = schToStr(monday);
+
+    // 月セル: 同じ年月なら加算、違えば新規
+    if (monthCells.length
+        && monthCells[monthCells.length - 1].month === month
+        && monthCells[monthCells.length - 1].year  === year) {
+      monthCells[monthCells.length - 1].days++;
+    } else {
+      monthCells.push({ month, year, days: 1 });
+    }
+
+    // 週セル: カレンダー週が変わる OR 月が変わるときに新規作成
+    const last = weekCells[weekCells.length - 1];
+    const needNew = !last
+      || last.mondayStr !== mondayStr
+      || last.month !== month;
+
+    if (needNew) {
+      if (!weekCountMap[mKey]) weekCountMap[mKey] = 0;
+      weekCountMap[mKey]++;
+      weekCells.push({ mondayStr, month, year,
+                       weekNum: weekCountMap[mKey], days: 1 });
+    } else {
+      last.days++;
+    }
+  }
+
+  return { monthCells, weekCells };
+}
+
 // ─── Init ───────────────────────────────────────────────────
 function initSchedule() {
   if (!S.schedule) S.schedule = { kickoff: '', groups: [] };
@@ -102,29 +155,11 @@ function renderGantt() {
     const ed = schDiff(kickoff, t.end) + 7;
     if (ed > maxDay) maxDay = ed;
   }));
-  const totalDays  = maxDay;
-  const totalWeeks = Math.ceil(totalDays / 7);
-  const totalW     = totalWeeks * 7 * SCH_DAY_W;
+  const totalDays = maxDay;
+  const totalW    = totalDays * SCH_DAY_W;
 
-  // Week data — weekNum = which week within that month (1–5)
-  const weeks = Array.from({ length: totalWeeks }, (_, i) => {
-    const d = schToDate(kickoff);
-    d.setDate(d.getDate() + i * 7);
-    return {
-      i,
-      month:   d.getMonth() + 1,
-      year:    d.getFullYear(),
-      weekNum: Math.ceil(d.getDate() / 7),
-    };
-  });
-
-  // Month groups
-  const months = [];
-  weeks.forEach(wk => {
-    const last = months[months.length - 1];
-    if (last && last.month === wk.month && last.year === wk.year) { last.span++; }
-    else months.push({ month: wk.month, year: wk.year, span: 1 });
-  });
+  // カレンダー週ベースでヘッダーセルを計算
+  const { monthCells, weekCells } = calcGanttHeaders(kickoff, totalDays);
 
   // Today
   const todayStr    = schToStr(new Date());
@@ -135,22 +170,22 @@ function renderGantt() {
   // ── HTML build ──
   let html = `<div class="gantt-inner" style="min-width:${SCH_LBL_W + totalW + 2}px">`;
 
-  // Month header
+  // Month header — 実際の暦日数ベースで幅を計算
   html += `<div class="gantt-row gantt-head-month">
     <div class="gantt-lbl gantt-corner" style="height:${SCH_MON_H}px"></div>
     <div class="gantt-bars" style="display:flex;height:${SCH_MON_H}px">
-      ${months.map(m => `<div class="gantt-month-cell" style="width:${m.span * 7 * SCH_DAY_W}px">${m.month}月</div>`).join('')}
+      ${monthCells.map(m => `<div class="gantt-month-cell" style="width:${m.days * SCH_DAY_W}px">${m.month}月</div>`).join('')}
     </div>
   </div>`;
 
-  // Week header — show week-of-month (w1〜w5)
+  // Week header — カレンダー週ベース、月境界で分割
   const todayWkHtml = showToday
     ? `<div class="gantt-today-marker" style="left:${todayPx}px"><span class="gantt-today-lbl">🐢 今ここ</span><div class="gantt-today-line" style="height:${SCH_WK_H}px"></div></div>`
     : '';
   html += `<div class="gantt-row gantt-head-week">
     <div class="gantt-lbl gantt-corner" style="height:${SCH_WK_H}px;font-size:10px;color:var(--text3)">グループ / タスク</div>
     <div class="gantt-bars" style="display:flex;position:relative;height:${SCH_WK_H}px">
-      ${weeks.map(wk => `<div class="gantt-week-cell" style="width:${7 * SCH_DAY_W}px">w${wk.weekNum}</div>`).join('')}
+      ${weekCells.map(wk => `<div class="gantt-week-cell" style="width:${wk.days * SCH_DAY_W}px">w${wk.weekNum}</div>`).join('')}
       ${todayWkHtml}
     </div>
   </div>`;
@@ -184,7 +219,7 @@ function renderGantt() {
         </div>
       </div>
       <div class="gantt-bars" style="position:relative;height:${SCH_GRP_H}px">
-        ${schGrid(totalWeeks, SCH_GRP_H)}
+        ${schGrid(weekCells, SCH_GRP_H)}
         ${showToday ? schTodayLine(todayPx, SCH_GRP_H) : ''}
       </div>
     </div>`;
@@ -194,7 +229,7 @@ function renderGantt() {
       html += `<div class="gantt-row">
         <div class="gantt-lbl gantt-task-lbl" style="height:${SCH_ROW_H}px;padding-left:22px;color:var(--text3);font-size:11px">タスクなし</div>
         <div class="gantt-bars" style="position:relative;height:${SCH_ROW_H}px">
-          ${schGrid(totalWeeks, SCH_ROW_H)}
+          ${schGrid(weekCells, SCH_ROW_H)}
           ${showToday ? schTodayLine(todayPx, SCH_ROW_H) : ''}
         </div>
       </div>`;
@@ -223,7 +258,7 @@ function renderGantt() {
           <button class="gantt-edit-btn" onclick="openSchModal('${group.id}','${task.id}')">✎</button>
         </div>
         <div class="gantt-bars" style="position:relative;height:${SCH_ROW_H}px">
-          ${schGrid(totalWeeks, SCH_ROW_H)}
+          ${schGrid(weekCells, SCH_ROW_H)}
           ${showToday ? schTodayLine(todayPx, SCH_ROW_H) : ''}
           <div class="gantt-bar ${isProd ? 'gantt-bar-prod' : 'gantt-bar-client'}${isDone ? ' gantt-bar-done' : ''}"
             data-gid="${group.id}" data-tid="${task.id}" data-status="${esc(task.status || '未対応')}"
@@ -242,10 +277,15 @@ function renderGantt() {
   wrap.innerHTML = html;
 }
 
-function schGrid(weeks, h) {
-  return Array.from({ length: weeks + 1 }, (_, i) =>
-    `<div class="gantt-grid-line" style="left:${i * 7 * SCH_DAY_W}px;height:${h}px"></div>`
-  ).join('');
+function schGrid(weekCells, h) {
+  let pos = 0;
+  const lines = weekCells.map(cell => {
+    const px = pos * SCH_DAY_W;
+    pos += cell.days;
+    return `<div class="gantt-grid-line" style="left:${px}px;height:${h}px"></div>`;
+  });
+  lines.push(`<div class="gantt-grid-line" style="left:${pos * SCH_DAY_W}px;height:${h}px"></div>`);
+  return lines.join('');
 }
 function schTodayLine(px, h) {
   return `<div class="gantt-today-line" style="left:${px}px;height:${h}px"></div>`;

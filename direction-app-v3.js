@@ -989,6 +989,139 @@ function autoBackup(name, data) {
   a.click();
 }
 
+// ===== FILE SYSTEM SYNC (File System Access API / Chrome・Edge のみ) =====
+let _fileHandle = null;
+
+// IndexedDB にファイルハンドルを永続化するミニラッパー
+function _idbOp(mode, fn) {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open('direction-board-fsh', 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore('h');
+    req.onsuccess = e => {
+      try {
+        const tx = e.target.result.transaction('h', mode);
+        fn(tx.objectStore('h'), res);
+        tx.onerror = () => rej(tx.error);
+      } catch (err) { rej(err); }
+    };
+    req.onerror = () => rej(req.error);
+  });
+}
+const _idbGet = k => _idbOp('readonly',  (s, r) => { const g = s.get(k); g.onsuccess = () => r(g.result); });
+const _idbPut = (k, v) => _idbOp('readwrite', (s, r) => { s.put(v, k).onsuccess = r; });
+const _idbDel = k => _idbOp('readwrite', (s, r) => { s.delete(k).onsuccess = r; });
+
+async function initFileSync() {
+  if (!('showSaveFilePicker' in window)) { updateFileSyncUI('unsupported'); return; }
+  try {
+    const handle = await _idbGet('fh');
+    if (!handle) { updateFileSyncUI('none'); return; }
+    const perm = await handle.queryPermission({ mode: 'readwrite' });
+    if (perm === 'granted') { _fileHandle = handle; updateFileSyncUI('connected'); }
+    else { updateFileSyncUI('needs-permission'); }
+  } catch { updateFileSyncUI('none'); }
+}
+
+async function setupFileSync() {
+  if (!('showSaveFilePicker' in window)) { showToast('この機能はChrome / Edgeのみ対応しています'); return; }
+  try {
+    const handle = await window.showSaveFilePicker({
+      suggestedName: 'direction-board-data.json',
+      startIn: 'documents',
+      types: [{ description: 'Direction Board データ', accept: { 'application/json': ['.json'] } }]
+    });
+    _fileHandle = handle;
+    await _idbPut('fh', handle);
+    await writeAllToFile();
+    updateFileSyncUI('connected');
+    localStorage.setItem('direction_board_last_backup', new Date().toISOString());
+    renderDashboard();
+    showToast('保存先を設定しました。以降は自動でファイルに書き込まれます。');
+  } catch { /* キャンセル */ }
+}
+
+async function reconnectFileSync() {
+  try {
+    let handle = _fileHandle || await _idbGet('fh');
+    if (!handle) { showToast('保存先が見つかりません。再設定してください。'); return; }
+    const perm = await handle.requestPermission({ mode: 'readwrite' });
+    if (perm === 'granted') {
+      _fileHandle = handle;
+      await writeAllToFile();
+      updateFileSyncUI('connected');
+      showToast('ファイル接続を再開しました。');
+    }
+  } catch { showToast('接続できませんでした。'); }
+}
+
+async function disconnectFileSync() {
+  _fileHandle = null;
+  try { await _idbDel('fh'); } catch {}
+  updateFileSyncUI('none');
+  renderDashboard();
+  showToast('ファイル同期を解除しました。');
+}
+
+async function writeAllToFile() {
+  if (!_fileHandle) return;
+  try {
+    const payload = JSON.stringify({
+      _schema: DATA_SCHEMA_VERSION,
+      _savedAt: new Date().toISOString(),
+      _appVersion: 'direction-board-v3',
+      projects: getProjects()
+    }, null, 2);
+    const writable = await _fileHandle.createWritable();
+    await writable.write(payload);
+    await writable.close();
+  } catch {
+    // 権限が切れた可能性
+    _fileHandle = null;
+    updateFileSyncUI('needs-permission');
+  }
+}
+
+function updateFileSyncUI(state) {
+  // ヘッダーバッジ
+  const badge = document.getElementById('filesync-badge');
+  if (badge) {
+    if (state === 'connected') {
+      badge.textContent = '📁 同期中';
+      badge.style.cursor = 'default';
+      badge.onclick = null;
+    } else if (state === 'needs-permission') {
+      badge.textContent = '📁 再接続が必要';
+      badge.style.color = '#fbbf24';
+      badge.style.cursor = 'pointer';
+      badge.onclick = reconnectFileSync;
+    } else {
+      badge.textContent = '';
+      badge.onclick = null;
+    }
+  }
+  // ダッシュボード内 UI
+  const ui = document.getElementById('filesync-ui');
+  if (!ui) return;
+  if (state === 'connected') {
+    ui.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span style="font-size:13px;color:var(--success)">✅ ファイルに自動保存中</span>
+        <button class="btn btn-o" onclick="disconnectFileSync()" style="font-size:11px">解除</button>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">保存・自動保存のたびにDocumentsのJSONファイルへ書き込まれます。</div>`;
+  } else if (state === 'needs-permission') {
+    ui.innerHTML = `
+      <button class="btn btn-o" onclick="reconnectFileSync()" style="font-size:13px">🔗 ファイル接続を再開</button>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">ブラウザ再起動後は再接続が必要です。クリック→「許可」で再開します。</div>`;
+  } else if (state === 'unsupported') {
+    ui.innerHTML = `<div style="font-size:12px;color:var(--text3)">⚠ この機能はChrome / Edgeのみ対応しています。</div>`;
+  } else {
+    ui.innerHTML = `
+      <button class="btn btn-p" onclick="setupFileSync()" style="font-size:13px">📁 ファイル保存先を設定する</button>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">DocumentsなどにJSONファイルを作成し、保存のたびに自動書き込みします。</div>`;
+  }
+}
+
 // ===== SAVE / LOAD =====
 function getAllInputs() {
   const ids = ['projectName', 'client_name', 'client_contact', 'client_region', 'ind3', 'project_phase', 'date_kickoff', 'date_delivery', 'budget', 'design_url', 'notes', 'mission_text', 'target_desc', 'target_behavior', 'avoid_image', 'persona_name', 'persona_job', 'persona_family', 'persona_lifestyle', 'persona_pain', 'persona_goal', 'persona_behavior', 'persona_quote', 'font_heading', 'font_body', 'tonmana_memo'];
@@ -1031,6 +1164,7 @@ function saveProject(silent = false) {
     updateSaveState();
     showToast('保存しました（⌘S で随時保存できます）');
     autoBackup(name, fullData);
+    writeAllToFile();
     return;
   }
 
@@ -1044,6 +1178,7 @@ function saveProject(silent = false) {
   projects[idx].mediums = [...S.mediums];
   projects[idx].data = fullData;
   setProjects(projects);
+  writeAllToFile();
 
   if (silent) {
     const el = document.getElementById('autosave-indicator');
@@ -2503,4 +2638,7 @@ document.addEventListener('keydown', e => {
 
 // ===== 初期表示の未保存状態を反映 =====
 updateSaveState();
+
+// ===== ファイル同期の初期化 =====
+initFileSync();
 

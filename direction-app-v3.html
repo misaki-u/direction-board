@@ -16,6 +16,7 @@
   <input class="project-input" id="projectName" placeholder="案件名を入力..." oninput="updateProjectTitle()">
   <div class="spacer"></div>
   <span id="unsaved-badge" style="display:none;font-size:11px;background:rgba(239,83,80,.9);color:#fff;padding:2px 10px;border-radius:100px;margin-right:6px;white-space:nowrap;animation:pulse-badge 1.8s ease-in-out infinite">未保存</span>
+  <span id="filesync-badge" style="font-size:11px;color:rgba(255,255,255,.55);margin-right:6px;white-space:nowrap"></span>
   <span id="autosave-indicator" style="font-size:11px;color:rgba(255,255,255,.45);opacity:0;transition:opacity 1s;margin-right:6px;white-space:nowrap"></span>
   <button class="hbtn" style="background:rgba(255,255,255,.25)" onclick="showDashboard()">📁 案件一覧</button>
   <button class="hbtn" id="save-btn" onclick="saveProject()">保存</button>
@@ -59,6 +60,13 @@
     <!-- データ管理 -->
     <div style="margin-top:40px;border-top:1px solid var(--border);padding-top:28px">
       <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);margin-bottom:14px">データ管理</div>
+
+      <!-- ファイル同期 -->
+      <div style="margin-bottom:18px;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:10px">
+        <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">📁 ファイル自動保存（Chrome推奨）</div>
+        <div id="filesync-ui"><!-- updateFileSyncUI() で描画 --></div>
+      </div>
+
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start">
         <div>
           <button class="btn btn-o" onclick="exportAllProjects()" style="font-size:13px">💾 全案件をバックアップ（JSON）</button>

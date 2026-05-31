@@ -760,6 +760,11 @@ function go(id) {
 
   const mainEl = document.querySelector('.main');
   if (mainEl) mainEl.scrollTop = 0;
+
+  // 現在のページを記録（リロード後の復元用）
+  if (currentProjectId) {
+    localStorage.setItem('direction_board_last_page_' + currentProjectId, id);
+  }
 }
 
 // ===== MEDIUMS =====
@@ -1833,6 +1838,11 @@ function openProject(id) {
   else { resetState(); }
   document.getElementById('projectName').value = proj.name;
   hideDashboard();
+
+  // 前回開いていたページ → なければスケジュール(p10)をトップに
+  const savedPage = localStorage.getItem('direction_board_last_page_' + id);
+  go(savedPage && document.getElementById(savedPage) ? savedPage : 'p10');
+
   showToast('「' + proj.name + '」を開きました');
 }
 

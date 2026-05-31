@@ -1827,6 +1827,7 @@ function openProject(id) {
   const proj = projects.find(p => p.id === id);
   if (!proj) return;
   currentProjectId = id;
+  localStorage.setItem('direction_board_last_project', id);
   updateSaveState();
   if (proj.data) { try { restoreData(proj.data); } catch (e) {} }
   else { resetState(); }
@@ -2229,7 +2230,10 @@ function deleteProject(id, e) {
   if (!proj) return;
   if (!confirm('「' + proj.name + '」を削除しますか？\nこの操作は取り消せません。')) return;
   setProjects(projects.filter(p => p.id !== id));
-  if (currentProjectId === id) currentProjectId = null;
+  if (currentProjectId === id) {
+    currentProjectId = null;
+    localStorage.removeItem('direction_board_last_project');
+  }
   renderDashboard();
   showToast('削除しました');
 }
@@ -2623,7 +2627,13 @@ initHearingScrollSpy();
 // initA11y() is called at the bottom of direction-app-v3-tools.js
 
 const _initProjects = getProjects();
-if (_initProjects.length === 0) { showDashboard(); }
+const _lastProjectId = localStorage.getItem('direction_board_last_project');
+const _lastProject   = _lastProjectId && _initProjects.find(p => p.id === _lastProjectId);
+if (_lastProject) {
+  openProject(_lastProjectId);  // 最後に開いていた案件を自動復元
+} else {
+  showDashboard();  // 初回 or 最後の案件が見つからない場合は一覧へ
+}
 
 // ===== AUTO-SAVE (30秒ごと、既存案件のみ) =====
 setInterval(() => { if (currentProjectId) saveProject(true); }, 30000);

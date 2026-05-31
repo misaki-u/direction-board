@@ -211,6 +211,7 @@ function renderGantt() {
     html += `<div class="gantt-row gantt-group-row">
       <div class="gantt-lbl gantt-group-lbl" style="height:${SCH_GRP_H}px;flex-direction:column;align-items:stretch;padding:6px 8px;gap:4px">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:4px">
+          <span class="gantt-grp-handle" onmousedown="schGrpDragStart(event,'${group.id}')" title="ドラッグして並び替え">⠿</span>
           <span class="gantt-group-name">${esc(group.name)}</span>
           <button class="gantt-mini-btn gantt-del-btn" onclick="schDeleteGroup('${group.id}')" title="グループを削除">×</button>
         </div>
@@ -281,6 +282,72 @@ function renderGantt() {
 
   html += `</div>`;
   wrap.innerHTML = html;
+}
+
+// ─── Group reorder drag ──────────────────────────────────────
+let _grpDrag = null;
+
+function schGrpDragStart(e, groupId) {
+  if (_drag) return;  // タスクバードラッグ中は無視
+  e.preventDefault();
+  e.stopPropagation();
+  schHideTip();
+  const idx = (S.schedule.groups || []).findIndex(g => g.id === groupId);
+  if (idx < 0) return;
+  _grpDrag = { groupId, fromIdx: idx, toIdx: idx };
+  document.body.style.userSelect = 'none';
+  document.body.style.cursor = 'grabbing';
+  document.addEventListener('mousemove', schGrpDragMove);
+  document.addEventListener('mouseup',   schGrpDragEnd);
+  _schGrpVisual();
+}
+
+function schGrpDragMove(e) {
+  if (!_grpDrag) return;
+  const rows = [...document.querySelectorAll('.gantt-group-row')];
+  let to = 0;
+  rows.forEach((row, i) => {
+    const r = row.getBoundingClientRect();
+    if (e.clientY > r.top + r.height / 2) to = i + 1;
+  });
+  _grpDrag.toIdx = Math.min(to, rows.length);
+  _schGrpVisual();
+}
+
+function _schGrpVisual() {
+  const rows = [...document.querySelectorAll('.gantt-group-row')];
+  const { fromIdx, toIdx } = _grpDrag;
+  rows.forEach((row, i) => {
+    row.classList.toggle('gantt-grp-dragging', i === fromIdx);
+    row.classList.remove('gantt-grp-drag-top', 'gantt-grp-drag-bottom');
+  });
+  // ドロップ先インジケーター（fromIdx/fromIdx+1 は「変化なし」なので非表示）
+  const noMove = toIdx === fromIdx || toIdx === fromIdx + 1;
+  if (!noMove) {
+    if (toIdx < rows.length) rows[toIdx].classList.add('gantt-grp-drag-top');
+    else rows[rows.length - 1].classList.add('gantt-grp-drag-bottom');
+  }
+}
+
+function schGrpDragEnd() {
+  if (!_grpDrag) return;
+  document.removeEventListener('mousemove', schGrpDragMove);
+  document.removeEventListener('mouseup',   schGrpDragEnd);
+  document.body.style.userSelect = '';
+  document.body.style.cursor = '';
+  const { fromIdx, toIdx } = _grpDrag;
+  _grpDrag = null;
+  document.querySelectorAll('.gantt-group-row').forEach(row => {
+    row.classList.remove('gantt-grp-dragging', 'gantt-grp-drag-top', 'gantt-grp-drag-bottom');
+  });
+  const noMove = toIdx === fromIdx || toIdx === fromIdx + 1;
+  if (!noMove) {
+    const groups = S.schedule.groups;
+    const [moved] = groups.splice(fromIdx, 1);
+    groups.splice(toIdx > fromIdx ? toIdx - 1 : toIdx, 0, moved);
+    renderGantt();
+    showToast('グループを並び替えました');
+  }
 }
 
 // ─── Tooltip ────────────────────────────────────────────────

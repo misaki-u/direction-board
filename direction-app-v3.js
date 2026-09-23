@@ -1861,11 +1861,18 @@ function newProject() {
   showToast('案件を作成しました');
 }
 
+// 別のブラウザタブで案件を開く（タブごとにURLの ?p= で案件を区別）
+function openProjectInNewTab(id, e) {
+  if (e) e.stopPropagation();
+  window.open(location.pathname + '?p=' + encodeURIComponent(id), '_blank');
+}
+
 function openProject(id) {
   const projects = getProjects();
   const proj = projects.find(p => p.id === id);
   if (!proj) return;
   currentProjectId = id;
+  history.replaceState(null, '', '?p=' + encodeURIComponent(id));
   localStorage.setItem('direction_board_last_project', id);
   localStorage.setItem('direction_board_last_view', 'project');
   updateSaveState();
@@ -2334,7 +2341,7 @@ function exportProject(id, e) {
 }
 
 // ===== DASHBOARD UI =====
-function showDashboard() { renderDashboard(); document.getElementById('dashboard').style.display = 'block'; localStorage.setItem('direction_board_last_view', 'dashboard'); updateDocTitle(); }
+function showDashboard() { history.replaceState(null, '', location.pathname); renderDashboard(); document.getElementById('dashboard').style.display = 'block'; localStorage.setItem('direction_board_last_view', 'dashboard'); updateDocTitle(); }
 function hideDashboard() {
   document.getElementById('dashboard').style.display = 'none';
   updateDocTitle();
@@ -2418,7 +2425,7 @@ function renderDashboard() {
     const moreMeds = (p.mediums || []).length > 3 ? `<span style="font-size:10px;color:var(--text3)">+${(p.mediums || []).length - 3}</span>` : '';
     const isCurrent = p.id === currentProjectId;
     return `
-    <div onclick="openProject('${p.id}')" style="background:var(--surface);border:1.5px solid ${isCurrent ? 'var(--accent)' : sc.border};border-radius:12px;padding:18px;cursor:pointer;transition:all .2s;position:relative" onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.08)'" onmouseout="this.style.boxShadow=''">
+    <div onclick="(event.metaKey || event.ctrlKey) ? openProjectInNewTab('${p.id}') : openProject('${p.id}')" style="background:var(--surface);border:1.5px solid ${isCurrent ? 'var(--accent)' : sc.border};border-radius:12px;padding:18px;cursor:pointer;transition:all .2s;position:relative" onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.08)'" onmouseout="this.style.boxShadow=''">
       ${isCurrent ? '<div style="position:absolute;top:12px;right:12px;font-size:9px;background:var(--accent);color:#fff;padding:2px 7px;border-radius:100px">編集中</div>' : ''}
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
         <div style="flex:1;min-width:0">
@@ -2436,6 +2443,7 @@ function renderDashboard() {
       <div style="display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid var(--border)">
         <span style="font-size:10px;color:var(--text3)">更新 ${updDate}</span>
         <div style="display:flex;gap:4px">
+          <button onclick="openProjectInNewTab('${p.id}',event)" title="別タブで開く" style="padding:4px 8px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text3);font-size:11px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;transition:all .15s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text3)'">↗</button>
           <button onclick="exportProject('${p.id}',event)" title="JSONエクスポート" style="padding:4px 8px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text3);font-size:11px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;transition:all .15s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text3)'">↓</button>
           <button onclick="duplicateProject('${p.id}',event)" title="複製" style="padding:4px 8px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text3);font-size:11px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;transition:all .15s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text3)'">⊕</button>
           <button onclick="deleteProject('${p.id}',event)" title="削除" style="padding:4px 8px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text3);font-size:11px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;transition:all .15s" onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--text3)'">×</button>
@@ -2691,11 +2699,14 @@ initHearingScrollSpy();
 // initA11y() is called at the bottom of direction-app-v3-tools.js
 
 const _initProjects  = getProjects();
+const _urlProjectId  = new URLSearchParams(location.search).get('p');
 const _lastView      = localStorage.getItem('direction_board_last_view');
 const _lastProjectId = localStorage.getItem('direction_board_last_project');
 const _lastProject   = _lastProjectId && _initProjects.find(p => p.id === _lastProjectId);
 
-if (_lastView === 'project' && _lastProject) {
+if (_urlProjectId && _initProjects.some(p => p.id === _urlProjectId)) {
+  openProject(_urlProjectId);    // URLで指定された案件（別タブで開いた・リロード）
+} else if (_lastView === 'project' && _lastProject) {
   openProject(_lastProjectId);   // 案件ページを開いていた → その案件を復元
 } else {
   showDashboard();               // 案件一覧を開いていた・初回・案件が見つからない

@@ -2272,7 +2272,15 @@ function deleteMinute(id) {
   showToast('削除しました');
 }
 
+// ブラウザのタブ名：一覧では「Direction Board」、案件ページでは「Direction Board/案件名」
+function updateDocTitle() {
+  const name = document.getElementById('projectName').value.trim();
+  const onDashboard = document.getElementById('dashboard').style.display !== 'none';
+  document.title = !onDashboard && name ? 'Direction Board/' + name : 'Direction Board';
+}
+
 function updateProjectTitle() {
+  updateDocTitle();
   if (!currentProjectId) return;
   const projects = getProjects();
   const idx = projects.findIndex(p => p.id === currentProjectId);
@@ -2327,9 +2335,10 @@ function exportProject(id, e) {
 }
 
 // ===== DASHBOARD UI =====
-function showDashboard() { renderDashboard(); document.getElementById('dashboard').style.display = 'block'; localStorage.setItem('direction_board_last_view', 'dashboard'); }
+function showDashboard() { renderDashboard(); document.getElementById('dashboard').style.display = 'block'; localStorage.setItem('direction_board_last_view', 'dashboard'); updateDocTitle(); }
 function hideDashboard() {
   document.getElementById('dashboard').style.display = 'none';
+  updateDocTitle();
   updateSaveState();
 }
 

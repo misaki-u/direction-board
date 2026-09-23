@@ -394,6 +394,58 @@ function toggleQ(id) {
   icon.classList.toggle('open', open);
 }
 
+// ===== ヒアリング項目を一括コピー（ChatGPT等で情報整理する用） =====
+// 画面上のヒアリングシートから項目を組み立てる（追加した質問も含む）
+function buildHearingItemsText() {
+  const out = [];
+  let n = 0;
+  document.querySelectorAll('#p1b .sblock').forEach(block => {
+    if (block.id === 'b9') return; // ネクストアクションはMTG後の管理用なので除外
+    const title = block.querySelector('.sblock-title')?.textContent.trim();
+    if (!title) return;
+    n++;
+    out.push('', `## ${n}. ${title}`);
+    block.querySelectorAll('.subsec-title, .itpane, .q-group, .kpi-item, .free-note').forEach(el => {
+      if (el.closest('#itp-med-its')) return; // Web診断は自分でチェックする項目なので除外
+      if (el.classList.contains('subsec-title')) {
+        out.push('', `### ${el.textContent.trim()}`);
+        if (el.nextElementSibling?.id === 'h-comp-rows') out.push('- 比較している会社名・提示金額・所感:');
+      } else if (el.classList.contains('itpane')) {
+        const [, scope, name] = el.id.match(/^itp-([^-]+)-(.+)$/) || [];
+        const tab = [...block.querySelectorAll('.itab')].find(t => t.getAttribute('onclick')?.includes(`'${scope}','${name}'`));
+        if (tab) out.push('', `### ${tab.textContent.trim()}（該当の場合）`);
+        if (el.id === 'itp-med-graphic') out.push('- 制作物の内容（上記以外の制作物）:');
+      } else if (el.classList.contains('q-group')) {
+        (QS[el.id.replace('qg-', '')] || []).forEach(q => out.push(`- ${q.q}${q.h ? '（' + q.h + '）' : ''}:`));
+      } else {
+        const label = el.querySelector('label')?.textContent.trim();
+        if (label) out.push(`- ${label}:`);
+      }
+    });
+  });
+  return out.join('\n').trim();
+}
+
+function copyHearingItems() {
+  const text =
+`以下の情報を、ヒアリングシートの項目に沿って整理してください。
+- 項目ごとに、該当する情報を抜き出して簡潔にまとめてください
+- 情報がない項目は「未確認」と記載してください
+- どの項目にも当てはまらない情報は、最後の「その他」にまとめてください
+- 推測で補わず、書かれている内容だけで整理してください
+
+${buildHearingItemsText()}
+
+## その他
+- 上記に当てはまらない情報:
+
+---
+【整理してほしい情報】
+（ここにメール・資料・議事録などの情報を貼り付けてください）
+`;
+  navigator.clipboard.writeText(text).then(() => showToast('ヒアリング項目をコピーしました。ChatGPTに貼り付けて、末尾に情報を追記してください'));
+}
+
 function toggleHL(key, id) {
   const q = QS[key] && QS[key].find(x => x.id === id);
   if (!q) return;

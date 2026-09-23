@@ -302,7 +302,7 @@
     <div class="h-mchip" onclick="this.classList.toggle('on')">ロゴ</div>
     <div class="h-mchip" onclick="this.classList.toggle('on')">チラシ・名刺</div>
     <div class="h-mchip" onclick="this.classList.toggle('on')">LINE / SNS</div>
-    <div class="h-mchip" onclick="this.classList.toggle('on')">他グラフィック</div>
+    <div class="h-mchip" onclick="this.classList.toggle('on')">その他</div>
     <div class="h-mchip" onclick="this.classList.toggle('on')">ITコンサル・Web診断</div>
   </div>
 
@@ -452,7 +452,7 @@
           <div class="itab" onclick="switchHTab('med','logo',this)">ロゴ</div>
           <div class="itab" onclick="switchHTab('med','print',this)">チラシ・名刺</div>
           <div class="itab" onclick="switchHTab('med','line',this)">LINE / SNS</div>
-          <div class="itab" onclick="switchHTab('med','graphic',this)">他グラフィック</div>
+          <div class="itab" onclick="switchHTab('med','graphic',this)">その他</div>
           <div class="itab" onclick="switchHTab('med','itc',this)">ITコンサル（ヒアリング）</div>
           <div class="itab" onclick="switchHTab('med','its',this)">Web診断（自分でチェック）</div>
         </div>
@@ -481,6 +481,7 @@
           <div class="free-note"><label>メモ・補足</label><textarea id="fn-line"></textarea></div>
         </div>
         <div class="itpane" id="itp-med-graphic">
+          <div class="free-note" style="margin:0 0 12px"><label>制作物の内容（自由記述）</label><textarea id="fn-graphic_desc" placeholder="例：看板、パンフレット、ポスター、パッケージ、ノベルティ など"></textarea></div>
           <div class="toggle-all-row"><button class="toggle-all-btn" onclick="openAll('b6-graphic')">すべて開く</button><button class="toggle-all-btn" onclick="closeAll('b6-graphic')">すべて閉じる</button></div>
           <div class="q-group" id="qg-graphic"></div>
           <div class="add-q-row"><input id="qi-graphic" placeholder="項目を追加..."><button onclick="addQ('graphic','qi-graphic')">＋ 追加</button></div>

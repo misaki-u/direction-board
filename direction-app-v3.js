@@ -296,6 +296,14 @@ const QD = {
     { q: 'SNSアカウントの状況・投稿頻度・フォロワー数', h: '' },
     { q: '反応の良いコンテンツの傾向', h: '' }
   ],
+  graphic: [
+    { q: '制作するグラフィックの種類', h: '看板 / パンフレット / ポスター / パッケージ / バナー / ノベルティ など' },
+    { q: 'サイズ・仕様・数量', h: '' },
+    { q: '使用場所・掲出期間', h: '' },
+    { q: '入稿形式・印刷会社・制作会社の指定', h: '' },
+    { q: '掲載必須の情報・素材（写真・イラスト・原稿）の有無', h: '' },
+    { q: 'ロゴ・Webサイト・既存ツールとの統一感の希望', h: '' }
+  ],
   itc: [
     { q: '現在のサイト・システムはいつ制作したか', h: '' },
     { q: 'サーバー・ドメインの契約先・更新時期', h: '' },
@@ -344,6 +352,7 @@ const naItems = DEFAULT_NA.map(t => ({ done: false, text: t }));
 
 // ===== HEARING INIT =====
 function initHearing() {
+  applyMarkColor(localStorage.getItem(MARK_COLOR_KEY));
   Object.keys(QD).forEach(key => {
     QS[key] = QD[key].map((q, i) => ({ ...q, id: `${key}-${i}`, answer: '' }));
     renderQ(key);
@@ -365,6 +374,7 @@ function renderQ(key) {
       <div class="q-header" onclick="toggleQ('${q.id}')">
         <div class="q-num">${i + 1}</div>
         <div class="q-label-text">${hesc(q.q)}</div>
+        <span class="q-mark-btn" title="優先マークの付け外し" onclick="event.stopPropagation();toggleHL('${key}','${q.id}')"></span>
         <span class="q-toggle-icon" id="icon-${q.id}">▼</span>
       </div>
       <div class="q-body" id="qb-${q.id}">
@@ -383,6 +393,31 @@ function toggleQ(id) {
   if (!body) return;
   const open = body.classList.toggle('open');
   icon.classList.toggle('open', open);
+}
+
+function toggleHL(key, id) {
+  const q = QS[key] && QS[key].find(x => x.id === id);
+  if (!q) return;
+  q.hl = q.hl ? 0 : 1;
+  const el = document.getElementById('qi-' + id);
+  if (el) el.classList.toggle('hl', !!q.hl);
+}
+
+// 優先マークの色（全案件共通の設定）
+const MARK_COLOR_KEY = 'direction_board_mark_color';
+function applyMarkColor(color) {
+  if (color) document.documentElement.style.setProperty('--q-mark', color);
+  else document.documentElement.style.removeProperty('--q-mark');
+  const input = document.getElementById('markColor');
+  if (input) input.value = color || getComputedStyle(document.documentElement).getPropertyValue('--warm').trim();
+}
+function setMarkColor(color) {
+  localStorage.setItem(MARK_COLOR_KEY, color);
+  applyMarkColor(color);
+}
+function resetMarkColor() {
+  localStorage.removeItem(MARK_COLOR_KEY);
+  applyMarkColor(null);
 }
 
 function upA(key, id, val) {
@@ -417,7 +452,7 @@ function getBlockEl(scope) {
   const map = {
     'b1': 'b1', 'b2': 'b2', 'b3': 'b3', 'b4': 'b4', 'b5': 'b5',
     'b6-web': 'itp-med-web', 'b6-logo': 'itp-med-logo',
-    'b6-print': 'itp-med-print', 'b6-line': 'itp-med-line',
+    'b6-print': 'itp-med-print', 'b6-line': 'itp-med-line', 'b6-graphic': 'itp-med-graphic',
     'b6-itc': 'itp-med-itc', 'b7': 'b7', 'b8': 'b8'
   };
   return map[scope] || scope;
@@ -1224,7 +1259,7 @@ function restoreData(d) {
   if (d.bullets) { Object.assign(S.bullets, d.bullets); ['goals', 'asis', 'tobe'].forEach(k => renderBullets(k + '-list', k)); }
   if (d.tactics) { S.tactics = d.tactics; renderTactics(); }
   if (d.cjm) { Object.assign(S.cjm, d.cjm); initCJM(); }
-  if (d.schedule) { S.schedule = d.schedule; if (typeof renderGantt === 'function') renderGantt(); }
+  if (d.schedule) { S.schedule = d.schedule; if (typeof initSchedule === 'function') initSchedule(); }
   if (d.meetings) { S.meetings = d.meetings; renderMinutesList(); }
   if (d.scale?.x != null) {
     const pin = document.getElementById('scalePin');
@@ -1835,8 +1870,8 @@ function openProject(id) {
   localStorage.setItem('direction_board_last_project', id);
   localStorage.setItem('direction_board_last_view', 'project');
   updateSaveState();
+  resetState();
   if (proj.data) { try { restoreData(proj.data); } catch (e) {} }
-  else { resetState(); }
   document.getElementById('projectName').value = proj.name;
   hideDashboard();
 
@@ -1875,6 +1910,7 @@ function resetState() {
   renderSidebarMeds(); updateRefFilter();
   renderBullets('goals-list', 'goals'); renderBullets('asis-list', 'asis'); renderBullets('tobe-list', 'tobe');
   renderTactics(); renderComps(); renderRefTable(); initCJM();
+  if (typeof initSchedule === 'function') initSchedule();
   resetHearing();
 }
 
@@ -2090,7 +2126,16 @@ ${transcript}
 - 反応の良いコンテンツの傾向:
 - メモ・補足:
 
-### 6-5. ITコンサル・Web環境（該当の場合）
+### 6-5. 他グラフィック（該当の場合）
+- 制作するグラフィックの種類（看板 / パンフレット / ポスター / パッケージ / バナー / ノベルティ など）:
+- サイズ・仕様・数量:
+- 使用場所・掲出期間:
+- 入稿形式・印刷会社・制作会社の指定:
+- 掲載必須の情報・素材（写真・イラスト・原稿）の有無:
+- ロゴ・Webサイト・既存ツールとの統一感の希望:
+- メモ・補足:
+
+### 6-6. ITコンサル・Web環境（該当の場合）
 - 現在のサイト・システムはいつ制作したか:
 - サーバー・ドメインの契約先・更新時期:
 - Googleアナリティクス（GA4）は入っているか:

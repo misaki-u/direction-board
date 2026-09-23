@@ -208,6 +208,8 @@ textarea{resize:vertical;min-height:72px;line-height:1.6}
 .h-med-lbl{font-size:11px;font-weight:500;color:var(--accent);white-space:nowrap}
 .h-mchip{padding:4px 13px;border:1px solid #b8d4c8;border-radius:100px;font-size:12px;cursor:pointer;transition:all .15s;color:var(--accent);background:var(--surface);user-select:none}
 .h-mchip:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+.h-med-other{flex:1;min-width:200px;padding:5px 12px;border:1px solid #b8d4c8;border-radius:100px;font-size:12px;font-family:'Noto Sans JP',sans-serif;color:var(--text);background:var(--surface);outline:none}
+.h-med-other:focus{border-color:var(--accent)}
 .h-mchip.on{background:var(--accent);border-color:var(--accent);color:#fff}
 
 /* Hearing two-column layout */

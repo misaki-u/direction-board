@@ -55,6 +55,26 @@ const SCH_PRESETS = {
     { name: '最終確認',                   type: 'client',     d: 16, dur: 2  },
     { name: '印刷データ入稿',             type: 'production', d: 18, dur: 2,  ms: '入稿' },
   ],
+  // パンフレット・ポスター・パッケージ等の印刷物全般（約1.5ヶ月想定）
+  // 仕様確定＝サイズ・部数・納期・予算 / 文字校正＝誤字・数値・連絡先
+  // 入稿データ＝CMYK・塗り足し・アウトライン・画像解像度
+  'グラフィック制作': [
+    { name: 'オリエン・仕様確定', type: 'production', d: 0,  dur: 3  },
+    { name: '原稿・素材支給',             type: 'client',     d: 0,  dur: 7  },
+    { name: '構成案（ラフ・ワイヤー）',   type: 'production', d: 3,  dur: 5,  ms: '構成案提出' },
+    { name: '構成案確認',                               type: 'client',     d: 8,  dur: 3  },
+    { name: '撮影・イラスト手配（任意）',         type: 'production', d: 11, dur: 7  },
+    { name: 'デザイン案作成（2〜3案）',           type: 'production', d: 11, dur: 7,  ms: '初稿提出' },
+    { name: '初稿確認・案決定',                         type: 'client',     d: 18, dur: 3  },
+    { name: 'デザイン修正・展開',                   type: 'production', d: 21, dur: 4,  ms: '修正稿提出' },
+    { name: '修正稿確認（2校）',                         type: 'client',     d: 25, dur: 3  },
+    { name: '最終修正・文字校正', type: 'production', d: 28, dur: 2  },
+    { name: '最終確認・校了',                           type: 'client',     d: 30, dur: 2,  ms: '校了' },
+    { name: '入稿データ作成', type: 'production', d: 32, dur: 2, ms: '入稿' },
+    { name: 'データチェック・色校正', type: 'production', d: 34, dur: 3  },
+    { name: '印刷・加工',                               type: 'production', d: 37, dur: 7  },
+    { name: '納品',                                     type: 'production', d: 44, dur: 1,  ms: '納品' },
+  ],
 };
 
 // ─── Utility ────────────────────────────────────────────────
